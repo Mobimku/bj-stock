@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# environment and deployment state
+.env
+.env.*
+!.env.example
+.vercel/
+
+# Supabase local state
+supabase/.branches/
+supabase/.temp/
+
+# tests and logs
+coverage/
+*.log
+*.tsbuildinfo
+
+# local files
+.DS_Store
+Thumbs.db
+*.zip
+new 39.txt
+.vercel
+.env*

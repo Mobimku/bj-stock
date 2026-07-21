@@ -1,0 +1,91 @@
+Vercel CLI 55.0.0 (Node.js 22.18.0)
+Retrieving projectΓÇª
+Deploying mobimku-1297s-projects/bj-stock
+Uploading [--------------------] (0.0B/282.9KB)
+Uploading [=====---------------] (74.6KB/282.9KB)
+Uploading [==========----------] (150.8KB/282.9KB)
+Uploading [===============-----] (214.9KB/282.9KB)
+Uploading [====================] (282.9KB/282.9KB)
+  Inspect         https://vercel.com/mobimku-1297s-projects/bj-stock/5dmMcWn7WAsbgTE3mtNWyFdpgnjs
+  Production      https://bj-stock-mvihyrqaw-mobimku-1297s-projects.vercel.app
+BuildingΓÇª
+Running build in Washington, D.C., USA (East) ΓÇô iad1
+Build machine configuration: 2 cores, 8 GB
+Retrieving list of deployment files...
+Retrieving list of deployment files...
+Downloading 136 deployment files...
+Restored build cache from previous deployment (6VB4viDE3rdNKBiE1YpamPUND2cT)
+Running "vercel build"
+Vercel CLI 55.0.0
+Installing dependencies...
+up to date in 893ms
+152 packages are looking for funding
+run `npm fund` for details
+Detected Next.js version: 16.2.10
+Running "npm run build"
+> bj-stock@0.1.0 build
+> next build
+Applying modifyConfig from Vercel
+Γû▓ Next.js 16.2.10 (Turbopack)
+Creating an optimized production build ...
+Γ£ô Compiled successfully in 14.6s
+Running TypeScript ...
+Finished TypeScript in 7.7s ...
+Collecting page data using 1 worker ...
+Generating static pages using 1 worker (0/11) ...
+Generating static pages using 1 worker (2/11)
+Generating static pages using 1 worker (5/11)
+Generating static pages using 1 worker (8/11)
+Γ£ô Generating static pages using 1 worker (11/11) in 160ms
+Finalizing page optimization ...
+Running onBuildComplete from Vercel
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ ╞Æ /api/bank-stock
+Γö£ ╞Æ /api/bank-stock/[id]
+Γö£ ╞Æ /api/customers
+Γö£ ╞Æ /api/finance
+Γö£ ╞Æ /api/sales
+Γö£ ╞Æ /api/service
+Γö£ ╞Æ /api/service/[id]
+Γö£ ╞Æ /api/service/[id]/part
+Γö£ ╞Æ /api/service/[id]/qr
+Γö£ ╞Æ /api/units
+Γö£ ╞Æ /api/units/[id]
+Γö£ ╞Æ /api/units/[id]/qr
+Γö£ ╞Æ /api/units/[id]/status
+Γö£ ╞Æ /api/units/[id]/upgrade
+Γö£ ╞Æ /api/warranty/claim
+Γö£ ╞Æ /bank-stock
+Γö£ ╞Æ /customers
+Γö£ ╞Æ /customers/[id]
+Γö£ ╞Æ /dashboard
+Γö£ ╞Æ /finance
+Γö£ Γùï /login
+Γö£ ╞Æ /reports
+Γö£ ╞Æ /s/[id_servis]
+Γö£ ╞Æ /sales
+Γö£ ╞Æ /sales/[id]
+Γö£ ╞Æ /sales/new
+Γö£ ╞Æ /scan
+Γö£ ╞Æ /service
+Γö£ ╞Æ /service/[id]
+Γö£ ╞Æ /service/[id]/receipt
+Γö£ ╞Æ /service/new
+Γö£ ╞Æ /units
+Γö£ ╞Æ /units/[id]
+Γö£ ╞Æ /units/new
+Γöö ╞Æ /warranty
+╞Æ Proxy (Middleware)
+Γùï  (Static)   prerendered as static content
+╞Æ  (Dynamic)  server-rendered on demand
+Build Completed in /vercel/output [29s]
+Deploying outputs...
+[2K[1A[2K[G  Production      https://bj-stock-mvihyrqaw-mobimku-1297s-projects.vercel.app
+CompletingΓÇª
+Γû▓ Aliased         https://bj-stock.vercel.app
+
+Γ£ô Ready in 47s
+> Tip: Run `npx plugins add vercel/vercel-plugin` to enhance your agent experience
+https://bj-stock-mvihyrqaw-mobimku-1297s-projects.vercel.app

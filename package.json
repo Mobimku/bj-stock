@@ -1,0 +1,40 @@
+{
+  "name": "bj-stock",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "test:db": "node supabase/tests/initial-migration.test.mjs && node supabase/tests/catalog-analytics.test.mjs && node supabase/tests/catalog-presentation.test.mjs && node supabase/tests/warranty-replacement.test.mjs && node supabase/tests/warranty-replacement-validation.test.mjs && node supabase/tests/finalization-lock-order.test.mjs && node supabase/tests/sale-unit-test.test.mjs && node supabase/tests/migration-reconciliation.test.mjs && node supabase/tests/release-blockers.test.mjs && node supabase/tests/app-settings-contract.test.mjs && node --experimental-strip-types supabase/tests/report-exports.test.mjs"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.0",
+    "@supabase/supabase-js": "^2.110.2",
+    "@zxing/browser": "^0.1.5",
+    "@zxing/library": "^0.21.3",
+    "next": "latest",
+    "qrcode": "^1.5.4",
+    "react": "latest",
+    "react-dom": "latest",
+    "sharp": "^0.35.3",
+    "typescript": "^5.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@tailwindcss/postcss": "latest",
+    "@types/node": "latest",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest",
+    "supabase": "^2.109.1",
+    "tailwindcss": "latest"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["sharp", "unrs-resolver", "eslint", "eslint-config-next"]
+  }
+}

@@ -1,0 +1,337 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --brand-primary: #198929;
+  --brand-secondary: #ff751f;
+  --brand-accent: #ffdc50;
+  --background: #f7faf7;
+  --surface: #ffffff;
+  --text-primary: #172019;
+  --text-secondary: #5e6b61;
+  --border: #dde5de;
+  --danger: #c62828;
+  --info: #1769aa;
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  background: var(--background);
+}
+
+/* iOS Safari zooms focused inputs when font-size < 16px */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (min-width: 768px) {
+  body:has(.dashboard-shell) {
+    overflow: hidden;
+  }
+}
+
+/* Invoice + checklist: force one A4 landscape sheet */
+@page {
+  size: A4 landscape;
+  margin: 5mm;
+}
+
+@media print {
+  html,
+  body {
+    height: auto;
+    overflow: visible;
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  [class~="print:hidden"] {
+    display: none !important;
+  }
+
+  body:has(.invoice-print-page) > :not(.dashboard-shell),
+  body:has(.invoice-print-page) .dashboard-shell > :not(.dashboard-frame),
+  body:has(.invoice-print-page) .dashboard-frame > :not(.dashboard-content),
+  body:has(.invoice-print-page) .dashboard-content > :not(.invoice-print-page),
+  .invoice-print-page > :not(.invoice-print-root) {
+    display: none !important;
+  }
+
+  body:has(.invoice-print-page),
+  body:has(.invoice-print-page) .dashboard-shell,
+  body:has(.invoice-print-page) .dashboard-frame,
+  body:has(.invoice-print-page) .dashboard-content {
+    display: block !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+
+  /* Printable area ≈ 287mm × 200mm with 5mm margins */
+  .invoice-print-page {
+    box-sizing: border-box;
+    display: block !important;
+    width: 287mm !important;
+    height: 200mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .invoice-print-root {
+    box-sizing: border-box;
+    display: grid !important;
+    /* ~58% invoice / ~42% checklist */
+    grid-template-columns: 165mm 116mm !important;
+    gap: 4mm !important;
+    width: 287mm !important;
+    height: 200mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    align-items: stretch !important;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  .invoice-print-left {
+    box-sizing: border-box;
+    min-width: 0;
+    width: 165mm !important;
+    max-width: 165mm !important;
+    height: 200mm !important;
+    overflow: hidden !important;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  .invoice-print-left > article {
+    box-sizing: border-box;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 3.5mm !important;
+    border: 0.4mm solid #171717 !important;
+    border-radius: 0 !important;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  /* Compact invoice typography & spacing */
+  .invoice-print-left article header {
+    gap: 3mm !important;
+    padding-bottom: 2.5mm !important;
+    border-bottom-width: 1.2mm !important;
+  }
+
+  .invoice-print-left article header img {
+    height: 11mm !important;
+    width: auto !important;
+  }
+
+  .invoice-print-left article header p,
+  .invoice-print-left article header h2 {
+    margin: 0.4mm 0 0 !important;
+  }
+
+  .invoice-print-left article header .text-sm {
+    font-size: 8pt !important;
+    line-height: 1.15 !important;
+  }
+
+  .invoice-print-left article header .text-xs {
+    font-size: 7pt !important;
+    letter-spacing: 0.08em !important;
+  }
+
+  .invoice-print-left article header h2 {
+    font-size: 12pt !important;
+    line-height: 1.1 !important;
+  }
+
+  .invoice-print-left article > section {
+    gap: 2.5mm !important;
+    padding-top: 3mm !important;
+    padding-bottom: 3mm !important;
+  }
+
+  .invoice-print-left article > section .text-lg {
+    font-size: 11pt !important;
+    line-height: 1.15 !important;
+  }
+
+  .invoice-print-left article > section .text-2xl {
+    font-size: 13pt !important;
+    line-height: 1.1 !important;
+  }
+
+  .invoice-print-left article > section .text-xl {
+    font-size: 12pt !important;
+  }
+
+  .invoice-print-left article > section .text-sm,
+  .invoice-print-left article > section .text-xs {
+    font-size: 8pt !important;
+    line-height: 1.15 !important;
+  }
+
+  .invoice-print-left article > section .mt-2 {
+    margin-top: 1mm !important;
+  }
+
+  .invoice-print-left article > section .mt-1 {
+    margin-top: 0.5mm !important;
+  }
+
+  .invoice-print-left article > section .mt-8 {
+    margin-top: 3mm !important;
+  }
+
+  .invoice-print-left article > section .pt-4 {
+    padding-top: 2mm !important;
+  }
+
+  .invoice-print-left article > footer {
+    margin-top: auto !important;
+    padding: 2.5mm !important;
+    border-radius: 0 !important;
+    font-size: 8pt !important;
+    line-height: 1.2 !important;
+  }
+
+  .invoice-print-left article > footer .mt-1 {
+    margin-top: 0.6mm !important;
+  }
+
+  /* Checklist panel */
+  .sale-test-print-panel {
+    box-sizing: border-box;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 116mm !important;
+    height: 200mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 2.5mm !important;
+    border: 0.4mm solid #171717 !important;
+    border-radius: 0 !important;
+    overflow: hidden !important;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  .sale-test-print-complete {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    row-gap: 1.5mm !important;
+  }
+
+  .sale-test-print-header {
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    padding-bottom: 1.2mm !important;
+    border-bottom: 0.6mm solid #171717 !important;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  .sale-test-print-header > * {
+    margin: 0 !important;
+  }
+
+  .sale-test-print-header > :first-child {
+    font-size: 6.5pt !important;
+    line-height: 1.1 !important;
+    letter-spacing: 0.12em !important;
+  }
+
+  .sale-test-print-header h2 {
+    margin-top: 0.6mm !important;
+    font-size: 10pt !important;
+    line-height: 1.1 !important;
+  }
+
+  .sale-test-print-header p {
+    margin-top: 0.4mm !important;
+    font-size: 6.5pt !important;
+    line-height: 1.15 !important;
+  }
+
+  .sale-test-table {
+    width: 100% !important;
+    flex: 1 1 auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    table-layout: fixed;
+    font-size: 6.8pt !important;
+    line-height: 1.12 !important;
+    border-collapse: collapse !important;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+
+  .sale-test-table col:first-child {
+    width: 32% !important;
+  }
+
+  .sale-test-table col:nth-child(2) {
+    width: 10% !important;
+  }
+
+  .sale-test-table thead,
+  .sale-test-table tbody,
+  .sale-test-table tr,
+  .sale-test-table th,
+  .sale-test-table td {
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+  }
+
+  .sale-test-table th,
+  .sale-test-table td {
+    padding: 0.7mm 0.8mm !important;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  .sale-test-table thead th {
+    font-size: 6.5pt !important;
+    padding: 0.8mm !important;
+  }
+
+  /* 12 categories → equal-ish row height without forcing page break */
+  .sale-test-table tbody tr {
+    height: auto !important;
+  }
+
+  .sale-test-acknowledgement {
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    margin: 0 !important;
+    padding: 1.5mm !important;
+    border-radius: 0 !important;
+    font-size: 6.2pt !important;
+    line-height: 1.15 !important;
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+}
