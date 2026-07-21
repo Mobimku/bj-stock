@@ -5,10 +5,12 @@ node_modules/
 .next/
 out/
 
-# environment and deployment state
+# environment and secrets (never commit)
 .env
 .env.*
 !.env.example
+
+# Vercel local link / deploy state
 .vercel/
 
 # Supabase local state
@@ -20,10 +22,8 @@ coverage/
 *.log
 *.tsbuildinfo
 
-# local files
+# OS / local junk
 .DS_Store
 Thumbs.db
 *.zip
 new 39.txt
-.vercel
-.env*
