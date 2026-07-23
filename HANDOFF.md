@@ -9,9 +9,54 @@ Tulis to-the-point. Entri terbaru di paling atas.
 
 ## Status Saat Ini
 
-- **Fase aktif**: Fase 9.17 Optimasi Foto Unit Responsif selesai dan deployed.
-- **Interface yang sudah bisa direview**: foto pada `/units`, detail unit, `/katalog`, dan detail katalog memakai optimizer responsif di `https://bj-stock.vercel.app`.
-- **Status**: Fase 9.17 deployed tanpa migration baru; Supabase tetap sinkron sampai `202607160002`. Source contract, full DB suite, strict audit, typecheck, local/Vercel build, dan Microsoft Edge production smoke lulus.
+- **Fase aktif**: Fase 9.17 selesai; dilanjutkan patch/hotfix pasca-restore (Juli 2026) dan backup GitHub.
+- **Production**: `https://bj-stock.vercel.app` (Vercel project `mobimku-1297s-projects/bj-stock`, deploy CLI).
+- **Supabase**: project `BJsys Project` / ref `ksecrddwowrswfcbdknf` (ap-northeast-2). Migration remote sampai `202607200003_fill_bank_stock_price_gap`.
+- **Source backup**: private GitHub `https://github.com/Mobimku/bj-stock` (`master`). Secret (`.env*`, `.vercel/`) **tidak** di-commit.
+- **Lokal**: workspace `D:\BJsys` (dipulihkan dari OpenCode snapshot + sesi tool history setelah folder hilang).
+- **Interface yang bisa direview**: seluruh modul sampai katalog/reports; patch terbaru: edit brand/model, print invoice 1 lembar, sidebar footer sticky, WA normalize, modal scroll-lock.
+
+---
+
+## Hotfix / Patch pasca-restore — 20–23 Juli 2026
+
+**Konteks**: folder lokal `D:\BJsys` hilang; dipulihkan dari OpenCode snapshot + DB/env production; lanjut hotfix operasional Owner.
+
+### Restore & infrastruktur
+- Restore source dari OpenCode git snapshot project hash `9c0059…` (+ backfill file hilang dari tool `read`/`write` di sesi).
+- `.env.local` diisi dari Vercel production env + catatan Owner; `vercel link` ke `bj-stock`.
+- Supabase CLI: `supabase login` + `link` project-ref `ksecrddwowrswfcbdknf`; migration push remote.
+- First git commit + private repo GitHub `Mobimku/bj-stock` (push `master`).
+
+### Database (production applied)
+| Migration | Isi |
+|-----------|-----|
+| `202607200001_fix_resale_constraint.sql` | Hapus UNIQUE unconditional `sales.id_unit`; partial unique index hanya sale `status != 'Dibatalkan'` → unit bisa dijual ulang setelah cancel. |
+| `202607200002_fix_bank_stock_price_update.sql` | `update_bank_part`: jika `modal_per_unit` berubah, catat koreksi finance untuk stok existing (bukan hanya saat restock). |
+| `202607200003_fill_bank_stock_price_gap.sql` | One-time fill gap historis: `expected = SUM(restock.qty)×modal_saat_ini` vs finance net; insert 1 txn koreksi per part (idempotent `part-price-gap-fill:v1:{id_part}`). Mouse: +149.850 → total finance 150.000. |
+
+### Aplikasi (deploy Vercel production)
+- **Akun**: create user admin/teknisi tanpa SMTP — password sementara di-generate server, dikembalikan di response UI (bukan email invite).
+- **WA**: normalisasi dulu (strip `+`/spasi/dash, `0…`/`8…` → `62…`) baru validasi; `onBlur` di form sales/service/customer/settings.
+- **iOS zoom input**: `input/select/textarea { font-size: 16px }` global + `text-base` pada field form.
+- **Edit unit**: Admin **dan** Owner boleh edit **brand** + **model** + spek/kondisi; **`id_unit` tidak berubah**; audit `edit_unit_identity` bila brand/model berubah.
+- **Modal edit unit**: lock scroll `body` + `.dashboard-content`; hanya panel form yang scroll (`overscroll-contain`).
+- **Print invoice**: `@page size A4 landscape; margin 5mm`; proporsi invoice ~165mm / checklist ~116mm; font & spacing dipadatkan agar 1 lembar.
+- **Sidebar desktop**: header + footer sticky; hanya nav list yang `overflow-y-auto`.
+
+### Keputusan
+- Backup source ke GitHub private; deploy tetap CLI Vercel (belum wajib git-integration).
+- Koreksi harga Bank Stock historis pakai **fill gap** (1 baris koreksi), bukan rewrite restock lama — audit trail utuh, anti-double via unique `source_event_key`.
+- Brand/model editable untuk koreksi typo; serial/modal_awal/sumber/tanggal/spek_awal tetap immutable.
+
+### Cara verifikasi cepat
+- Sales: cancel → Ready → Listed → jual ulang unit yang sama.
+- Bank Stock: ubah modal/unit tanpa restock → finance ada baris koreksi; total net = qty_restock × modal_saat_ini.
+- Edit unit: ubah brand/model → header unit berubah, ID tetap; scroll modal tidak menggeser background.
+- Print: invoice + checklist test landscape 1 halaman.
+- GitHub: repo private, tanpa file `.env.local`.
+
+**Status interface**: production deployed; Owner lanjut operasi harian.
 
 ---
 
@@ -704,7 +749,7 @@ Tulis to-the-point. Entri terbaru di paling atas.
 - [x] Ada interface — bisa direview di halaman detail unit (`/units/[id]`)
 
 **Yang belum selesai / diketahui rusak**
-- Edit field unit (brand, model, serial, spek, kondisi, sumber) belum diimplementasi (hanya delisting). Ini bisa jadi task lanjutan jika diperlukan.
+- ~~Edit field unit (brand, model, …) belum diimplementasi~~ — **Resolved 2026-07-23**: brand/model + spek/kondisi editable Admin/Owner; serial/sumber/modal/tanggal/spek_awal tetap immutable (lihat entri Hotfix pasca-restore).
 
 **Rekomendasi**
 - Owner review: delist satu unit dengan jenis `retur_supplier`, pastikan reversal finance muncul di arus kas; lalu reactivate dan pastikan transaksi baru muncul.

@@ -94,11 +94,12 @@ Setelah unit dibuat (F-STK-01), admin bisa mengupdate spesifikasi yang berubah s
 - `spek_saat_ini` (textarea) — teks bebas, snapshot spek saat ini.
 - `kondisi_fisik` (select: A/B/C) — grade kondisi fisik unit.
 - `kondisi_fungsi` (input teks) — catatan kondisi fungsi.
-- Field `brand`, `model`, `serial_number`, `sumber_beli`, `modal_awal`, `tanggal_masuk`, `spek_awal` **tidak bisa diubah** setelah create — typo fix bisa pakai delist `salah_input` (hard delete) + re-create.
+- Field `serial_number`, `sumber_beli`, `modal_awal`, `tanggal_masuk`, `spek_awal` **tidak bisa diubah** setelah create (typo serial / koreksi modal tetap lewat delist `salah_input` + re-create bila perlu).
+- Field **`brand` dan `model` boleh dikoreksi** oleh Admin/Owner lewat modal Edit unit (`PATCH /api/units/[id]`) untuk typo penamaan. **`id_unit` tidak di-regenerate** (kode QR/ID tetap). Perubahan brand/model dicatat audit `edit_unit_identity` bila tersedia.
 
 **Alur edit (admin):**
 1. Di `/units/[id]`, section "Spek & Kondisi" menampilkan current spec ringkas (spek_saat_ini + kondisi fisik/fungsi) + snapshot `spek_awal` (read-only) untuk perbandingan cepat.
-2. Tombol "Edit spek & kondisi" (outline amber) → buka native `<dialog>` modal dengan 3 field pre-filled dari current state.
+2. Tombol "Edit unit" (outline amber) → buka native `<dialog>` modal dengan field: brand, model, spek_saat_ini, kondisi_fisik, kondisi_fungsi (pre-filled). Modal mengunci scroll background (`.dashboard-content`); hanya panel form yang scroll.
 3. Save → `PATCH /api/units/[id]` dengan body `{ spek_saat_ini?, kondisi_fisik?, kondisi_fungsi? }` — hanya field yang berubah dikirim. Bila tak ada field yang distinct dari current, no-op insert trigger tidak mengeksekusi, save tetap sukses (http 200, no row inserted).
 4. Trigger `AFTER UPDATE OF spek_saat_ini, kondisi_fisik, kondisi_fungsi` auto-insert row baru ke `unit_spec_history` dengan `changed_at = now()` + `changed_by = auth.uid()` + `catatan = null` (kosong, atau bisa diisi dari frontend bila user mengisi catatan alasan).
 5. `router.refresh()` → halaman re-render dengan current spec baru + timeline baru muncul.
@@ -109,7 +110,7 @@ Setelah unit dibuat (F-STK-01), admin bisa mengupdate spesifikasi yang berubah s
 - Setiap entry tampilkan: `changed_at` (format Indonesia), `changed_by` (email user bila join ke `auth.users`), `catatan`, dan diff ketiga field (spek_saat_ini/kondisi_fisik/kondisi_fungsi). Bila semua null → tampilkan placeholder "-".
 
 **Permission:**
-- Edit dropdown + modal: admin-only. Tombol "Edit spek & kondisi" hanya muncul bila `isAdmin` (lihat Fase 7.1 RBAC).
+- Edit modal: Admin **dan** Owner. Tombol "Edit unit" hanya muncul bila `isAdmin` (role admin/owner di layout dashboard).
 - Read timeline: semua user login.
 
 **F-STK-03 — Lookup via Scan QR**
