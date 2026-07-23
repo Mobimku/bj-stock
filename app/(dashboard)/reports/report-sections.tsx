@@ -207,3 +207,69 @@ export function TopUnitsSection({ analytics }: { analytics: CatalogAnalytics }) 
       )}</>
   );
 }
+
+const SOURCE_LABELS: Record<string, string> = {
+  direct: "Langsung / unknown",
+  unknown: "Tidak diketahui",
+  google: "Google",
+  instagram: "Instagram",
+  facebook: "Facebook",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  whatsapp: "WhatsApp",
+  x: "X / Twitter",
+  shopee: "Shopee",
+  tokopedia: "Tokopedia",
+  lazada: "Lazada",
+  telegram: "Telegram",
+  bing: "Bing",
+};
+
+function sourceLabel(source: string) {
+  if (SOURCE_LABELS[source]) return SOURCE_LABELS[source];
+  if (source.startsWith("utm:")) return `Kampanye (${source.slice(4)})`;
+  return source;
+}
+
+export function TopSourcesSection({ analytics }: { analytics: CatalogAnalytics }) {
+  const sources = analytics.top_sources ?? [];
+  return (
+    <>
+      <div className="flex flex-col items-start justify-between gap-2 sm:flex-row">
+        <div>
+          <h3 className="text-lg font-black">Sumber trafik · 30 hari</h3>
+          <p className="mt-1 text-sm text-[#5e6b61]">
+            Dari UTM link / referrer (bukan URL mentah). Optimasi channel yang bawa pengunjung & WA.
+          </p>
+        </div>
+        <CsvLink href="/api/reports/export?dataset=catalog-top-sources&days=30" label="CSV" />
+      </div>
+      {sources.length === 0 ? (
+        <Empty text="Belum ada data sumber trafik. Bagikan link katalog dengan ?utm_source=instagram dsb." />
+      ) : (
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-[#dde5de] bg-white">
+          <table className="w-full min-w-[28rem] text-left text-sm">
+            <thead className="border-b border-[#dde5de] bg-[#f7faf7] text-xs font-bold uppercase text-[#5e6b61]">
+              <tr>
+                <th className="px-4 py-3">Sumber</th>
+                <th className="px-4 py-3 text-right">Pengunjung</th>
+                <th className="px-4 py-3 text-right">Detail</th>
+                <th className="px-4 py-3 text-right">Klik WA</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#dde5de]">
+              {sources.map((row) => (
+                <tr key={row.source} className="hover:bg-[#f7faf7]">
+                  <td className="px-4 py-3 font-bold text-[#172019]">{sourceLabel(row.source)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-black">{formatNumber(row.visitors)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatNumber(row.detail_views)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatNumber(row.whatsapp_clicks)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}

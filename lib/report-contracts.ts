@@ -46,6 +46,13 @@ export const catalogTopUnitSchema = z.object({
   detail_views: postgresNumberSchema,
 }).readonly();
 
+export const catalogTopSourceSchema = z.object({
+  source: z.string(),
+  visitors: postgresNumberSchema,
+  detail_views: postgresNumberSchema,
+  whatsapp_clicks: postgresNumberSchema,
+}).readonly();
+
 export const catalogAnalyticsRowSchema = z.object({
   unique_visitors: postgresNumberSchema,
   detail_views: postgresNumberSchema,
@@ -53,6 +60,7 @@ export const catalogAnalyticsRowSchema = z.object({
   share_clicks: postgresNumberSchema,
   conversion_rate: postgresNumberSchema,
   top_units: z.array(catalogTopUnitSchema).readonly(),
+  top_sources: z.array(catalogTopSourceSchema).readonly().default([]),
 }).readonly();
 export const catalogAnalyticsSchema = z.array(catalogAnalyticsRowSchema).readonly();
 
@@ -60,4 +68,5 @@ export type MarginReportRow = z.infer<typeof marginReportRowSchema>;
 export type TurnoverReportRow = z.infer<typeof turnoverReportRowSchema>;
 export type LeadReportRow = z.infer<typeof leadReportRowSchema>;
 export type CatalogTopUnit = z.infer<typeof catalogTopUnitSchema>;
+export type CatalogTopSource = z.infer<typeof catalogTopSourceSchema>;
 export type CatalogAnalytics = z.infer<typeof catalogAnalyticsRowSchema>;

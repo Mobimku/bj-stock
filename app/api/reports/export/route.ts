@@ -19,7 +19,7 @@ const dateQuerySchema = z.strictObject({
 }).readonly();
 
 const catalogQuerySchema = z.strictObject({
-  dataset: z.enum(["catalog-summary", "catalog-top-units"]),
+  dataset: z.enum(["catalog-summary", "catalog-top-units", "catalog-top-sources"]),
   days: z.enum(["7", "30"]).transform(Number),
 }).readonly();
 
@@ -49,6 +49,12 @@ const CATALOG_SUMMARY_HEADERS = [
   "Konversi WhatsApp (%)",
 ] as const;
 const CATALOG_TOP_UNIT_HEADERS = ["ID Unit", "Brand", "Model", "Detail Dilihat"] as const;
+const CATALOG_TOP_SOURCE_HEADERS = [
+  "Sumber",
+  "Pengunjung",
+  "Detail Dilihat",
+  "Klik WhatsApp",
+] as const;
 
 type CsvRow = Readonly<Record<string, unknown>>;
 
@@ -183,6 +189,22 @@ export async function GET(request: Request) {
             Brand: unit.brand,
             Model: unit.model ?? "",
             "Detail Dilihat": unit.detail_views,
+          })),
+        );
+      }
+      case "catalog-top-sources": {
+        const result = await supabase.rpc("get_catalog_analytics", { p_days: query.days });
+        const parsed = catalogAnalyticsSchema.safeParse(result.data);
+        const analytics = parsed.success ? parsed.data[0] : undefined;
+        if (result.error || !analytics) return serverError();
+        return csvResponse(
+          `laporan-sumber-trafik-katalog-${query.days}-hari.csv`,
+          CATALOG_TOP_SOURCE_HEADERS,
+          (analytics.top_sources ?? []).map((row) => ({
+            Sumber: row.source,
+            Pengunjung: row.visitors,
+            "Detail Dilihat": row.detail_views,
+            "Klik WhatsApp": row.whatsapp_clicks,
           })),
         );
       }

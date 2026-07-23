@@ -127,5 +127,53 @@ await db.exec(`select set_config('request.jwt.claims', '{"app_metadata":{"role":
   assert.equal(analytics.rows[0].conversion_rate, "100.0");
 }
 
+// --- Traffic source (202607230001) ---
+const trafficMigrationUrl = new URL(
+  "../migrations/202607230001_catalog_traffic_source.sql",
+  import.meta.url,
+);
+assert.ok(existsSync(fileURLToPath(trafficMigrationUrl)), "traffic source migration must exist");
+await db.exec(await readFile(trafficMigrationUrl, "utf8"));
+
+// 3-param overload must coexist with 4-param overload (no drop)
+await db.exec(`select set_config('request.jwt.claims', '{}', false);`);
+const coexists = await db.query(
+  "select public.record_catalog_event('catalog_view', $1, null) as ok",
+  ["55555555-5555-4555-8555-555555555555"],
+);
+assert.equal(coexists.rows[0].ok, true);
+
+await db.exec(`select set_config('request.jwt.claims', '{}', false);`);
+const visitor2 = "33333333-3333-4333-8333-333333333333";
+await db.query(
+  "select public.record_catalog_event('catalog_view', $1, null, $2)",
+  [visitor2, "utm:instagram-story"],
+);
+await db.query(
+  "select public.record_catalog_event('detail_view', $1, $2, $3)",
+  [visitor2, "BJ-HP-2607-001", "utm:instagram-story"],
+);
+await db.query(
+  "select public.record_catalog_event('whatsapp_click', $1, $2, $3)",
+  [visitor2, "BJ-HP-2607-001", "utm:instagram-story"],
+);
+
+// invalid source chars stripped / rejected to null path still records event
+await db.query(
+  "select public.record_catalog_event('catalog_view', $1, null, $2)",
+  ["44444444-4444-4444-8444-444444444444", "!!!"],
+);
+
+await db.exec(`select set_config('request.jwt.claims', '{"app_metadata":{"role":"owner"}}', false);`);
+{
+  const analytics = await db.query("select * from public.get_catalog_analytics(30)");
+  assert.ok(Array.isArray(analytics.rows[0].top_sources));
+  const sources = analytics.rows[0].top_sources;
+  const ig = sources.find((s) => s.source === "utm:instagram-story");
+  assert.ok(ig, "expected utm:instagram-story in top_sources");
+  assert.equal(ig.visitors, 1);
+  assert.equal(ig.whatsapp_clicks, 1);
+}
+
 await db.close();
 console.log("catalog analytics migration tests passed");

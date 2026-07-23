@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { getOrCaptureTrafficSource } from "@/lib/catalog-traffic-source";
 
 const SESSION_STORAGE_KEY = "bj-catalog-anonymous-session-id";
 const emittedEvents = new Set<string>();
@@ -33,7 +34,8 @@ export function recordCatalogEvent(event: CatalogEvent): void {
     localStorage.setItem(SESSION_STORAGE_KEY, sessionId);
   }
 
-  const body = JSON.stringify({ ...event, sessionId });
+  const trafficSource = getOrCaptureTrafficSource();
+  const body = JSON.stringify({ ...event, sessionId, trafficSource });
   if (typeof navigator.sendBeacon === "function") {
     const queued = navigator.sendBeacon(
       "/api/catalog/events",

@@ -14,6 +14,7 @@ import {
   LeadsSection,
   CatalogSection,
   TopUnitsSection,
+  TopSourcesSection,
 } from "./report-sections";
 
 export default async function ReportsPage({
@@ -56,7 +57,7 @@ export default async function ReportsPage({
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#ff751f]">Laporan</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Data untuk keputusan bisnis</h1>
-          <p className="mt-2 max-w-2xl text-[#5e6b61]">Margin per brand, kecepatan perputaran stock, dan efektivitas sumber lead.</p>
+          <p className="mt-2 max-w-2xl text-[#5e6b61]">Margin per brand, kecepatan perputaran stock, sumber lead, dan sumber trafik katalog.</p>
         </div>
         <form className="grid grid-cols-2 gap-3 rounded-2xl border border-[#dde5de] bg-white p-4" method="get">
           <DateFilter label="Dari" name="start" value={start} />
@@ -77,6 +78,9 @@ export default async function ReportsPage({
         </div>
         <div className="mt-6">
           <TopUnitsSection analytics={analytics30.data[0]} />
+        </div>
+        <div className="mt-6">
+          <TopSourcesSection analytics={analytics30.data[0]} />
         </div>
       </section>
 
