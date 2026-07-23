@@ -9,12 +9,44 @@ Tulis to-the-point. Entri terbaru di paling atas.
 
 ## Status Saat Ini
 
-- **Fase aktif**: Fase 9.17 selesai; dilanjutkan patch/hotfix pasca-restore (Juli 2026) dan backup GitHub.
+- **Fase aktif**: Fase 9.18 Analytics Sumber Trafik Katalog selesai dan deployed production.
 - **Production**: `https://bj-stock.vercel.app` (Vercel project `mobimku-1297s-projects/bj-stock`, deploy CLI).
-- **Supabase**: project `BJsys Project` / ref `ksecrddwowrswfcbdknf` (ap-northeast-2). Migration remote sampai `202607200003_fill_bank_stock_price_gap`.
+- **Supabase**: project `BJsys Project` / ref `ksecrddwowrswfcbdknf` (ap-northeast-2). Migration remote sampai `202607230001_catalog_traffic_source`.
 - **Source backup**: private GitHub `https://github.com/Mobimku/bj-stock` (`master`). Secret (`.env*`, `.vercel/`) **tidak** di-commit.
 - **Lokal**: workspace `D:\BJsys` (dipulihkan dari OpenCode snapshot + sesi tool history setelah folder hilang).
-- **Interface yang bisa direview**: seluruh modul sampai katalog/reports; patch terbaru: edit brand/model, print invoice 1 lembar, sidebar footer sticky, WA normalize, modal scroll-lock.
+- **Interface yang bisa direview**: seluruh modul sampai katalog/reports; Reports kini memiliki tabel dan CSV sumber trafik katalog.
+
+---
+
+## Fase 9.18 — Analytics Sumber Trafik Katalog — 23 Juli 2026
+
+**Apa yang dibangun**
+- `catalog_events.traffic_source` menyimpan label pendek terklasifikasi. UTM diprioritaskan, lalu alias share/referrer hostname, lalu `direct`; source pertama disimpan per tab di `sessionStorage`.
+- Empat event katalog membawa `trafficSource`. Event internal tetap ditandai dari JWT dan dikecualikan dari statistik publik.
+- RPC analytics mengembalikan `top_sources` berisi visitor unik, detail view, dan klik WhatsApp. Reports menampilkan tabel sumber 30 hari dan ekspor CSV `catalog-top-sources`.
+
+**Keputusan teknis**
+- Privacy-first: tidak menyimpan raw URL/referrer, IP, user agent, lokasi, atau fingerprint; label divalidasi regex dan dibatasi 48 karakter.
+- RPC `record_catalog_event(text, uuid, text)` yang sudah live dipertahankan. Overload baru `(text, uuid, text, text)` mewajibkan tepat empat argumen sehingga PostgREST dapat merutekan kedua versi tanpa ambigu selama cutover.
+- Vercel CLI membaca token dari `VERCEL_TOKEN`; credential lokal bernama `VERCEL_ACCESS_TOKEN`, jadi deployment memetakan nilainya di process memory dan membuang surrounding quotes tanpa mencatat nilainya.
+
+**Verifikasi dan deployment**
+- Focused `catalog-analytics.test.mjs`: 1/1 lulus. `tsc --noEmit --incremental false`, build lokal Next, dan build Vercel lulus.
+- Standalone lint tetap terblokir incompatibility existing ESLint 10/`eslint-plugin-react`; crash terjadi sebelum source dibaca.
+- Supabase local/remote sinkron sampai `202607230001`; kompatibilitas aplikasi lama setelah migration dibuktikan `POST /api/catalog/events` HTTP 204.
+- Commit feature `3547ccd` sudah di-push ke private GitHub `master`.
+- Deployment Ready Production: `https://bj-stock-3bzjcjgvh-mobimku-1297s-projects.vercel.app`, aliased ke `https://bj-stock.vercel.app`.
+- Playwright fresh context mengirim `catalog_view` dan `detail_view` dengan `trafficSource: "utm:instagram-story-release3547final"`, source/session yang sama, kedua response HTTP 204, dan tanpa console error.
+
+**Status interface**
+- [x] Backend, katalog tracker, Reports, dan CSV deployed production.
+- [ ] Owner/Admin dapat review tabel sumber dan CSV setelah trafik nyata terakumulasi; event historis tanpa source tampil sebagai **Tidak diketahui**.
+
+**Yang belum selesai / diketahui rusak**
+- Tidak ada blocker produk yang diketahui. Standalone lint masih memiliki incompatibility toolchain existing.
+
+**Rekomendasi mulai fase berikutnya dari mana**
+- Review `/reports` setelah beberapa link UTM dipakai; jangan menambah raw referrer atau identitas pengunjung hanya untuk memperkaya label channel.
 
 ---
 

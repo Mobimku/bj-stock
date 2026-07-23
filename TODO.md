@@ -592,6 +592,23 @@ Tanpa migration ini, cancel service tetap berjalan (biaya di-0-kan, parts dikemb
 
 ---
 
+## Fase 9.18 — Analytics Sumber Trafik Katalog (8 task · 👤 review interface)
+
+**Konteks**: Owner perlu membandingkan channel yang membawa pengunjung katalog tanpa menyimpan URL referrer mentah atau identitas personal. Sumber pertama per tab diklasifikasi menjadi label pendek dari UTM, alias share, atau hostname referrer, lalu digunakan untuk seluruh event katalog pada tab tersebut.
+
+- [x] Migration `202607230001`: tambah `catalog_events.traffic_source`, constraint label 48 karakter, partial index, dan agregat `top_sources`
+- [x] Pertahankan RPC 3-parameter yang sudah live dan tambah overload 4-parameter tanpa default agar cutover PostgREST tidak ambigu atau downtime
+- [x] Tambah classifier privacy-first + first-capture-per-tab di `sessionStorage`; event `catalog_view`, `detail_view`, `whatsapp_click`, dan `share_click` membawa `trafficSource`
+- [x] Tambah tabel sumber trafik 30 hari pada Reports dan dataset CSV `catalog-top-sources`
+- [x] Focused regression migration 1/1 lulus; TypeScript dan production build lokal lulus
+- [x] Push migration Supabase production dan deploy Vercel production
+- [x] Playwright production smoke: `catalog_view` + `detail_view` memakai source/session yang sama dan keduanya HTTP 204 tanpa console error
+- [x] Update `TODO.md` dan `HANDOFF.md` setelah production smoke lulus
+
+👤 **Review interface**: setelah trafik nyata terakumulasi, login Owner/Admin lalu buka `/reports`. Bandingkan baris sumber trafik dan ekspor CSV; event lama tanpa source wajar tampil sebagai **Tidak diketahui**.
+
+---
+
 ## Patch — Pasca-restore & Operasional (Juli 2026) · 🤖 self-verify + 👤 review
 
 **Konteks**: workspace lokal hilang; restore dari OpenCode + env production; hotfix bug operasional Owner; backup source ke GitHub private.
@@ -617,6 +634,7 @@ Tanpa migration ini, cancel service tetap berjalan (biaya di-0-kan, parts dikemb
 ## Catatan Keputusan Teknis
 _(diisi berjalan, tambahkan entri baru di bawah dengan tanggal)_
 
+- 2026-07-23 — **Sumber trafik katalog memakai label pendek, bukan raw tracking**: sistem menyimpan UTM/referrer yang sudah diklasifikasi maksimal 48 karakter; tidak menyimpan raw URL, IP, user agent, lokasi, atau fingerprint. RPC 3-parameter yang sudah live dipertahankan saat overload 4-parameter ditambah agar deployment lama dan baru dapat coexist selama cutover tanpa downtime.
 - 2026-07-23 — **Brand/model editable, id_unit fixed**: koreksi typo penamaan unit diizinkan Admin/Owner lewat Edit unit. Serial, modal_awal, sumber, tanggal, spek_awal tetap immutable. Tidak regenerate `id_unit` agar QR/histori invoice tetap valid.
 - 2026-07-23 — **Backup source private GitHub**: repo `https://github.com/Mobimku/bj-stock`; deploy tetap Vercel CLI. Secret hanya di Vercel/Supabase env + `.env.local` lokal (gitignored).
 - 2026-07-20 — **Resale setelah cancel**: UNIQUE `sales.id_unit` diganti partial unique (`status IS DISTINCT FROM 'Dibatalkan'`) agar cancel tidak memblokir penjualan ulang unit yang sama.
