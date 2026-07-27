@@ -3,7 +3,7 @@ export type AppRole = "admin" | "teknisi" | "owner";
 export type NavItem = {
   href: string;
   label: string;
-  icon: "scan" | "unit" | "stock" | "sales" | "warranty" | "service" | "customer" | "finance" | "dashboard" | "report" | "export" | "help" | "settings";
+  icon: "scan" | "unit" | "stock" | "sales" | "warranty" | "service" | "customer" | "finance" | "dashboard" | "report" | "export" | "help" | "settings" | "reservation";
   roles: AppRole[];
   mobile: boolean;
 };
@@ -13,6 +13,7 @@ export const navItems: NavItem[] = [
   { href: "/scan", label: "Scan", icon: "scan", roles: ["admin", "teknisi", "owner"], mobile: true },
   { href: "/units", label: "Unit / Upgrade", icon: "unit", roles: ["admin", "teknisi", "owner"], mobile: true },
   { href: "/sales", label: "Sales", icon: "sales", roles: ["admin", "owner"], mobile: true },
+  { href: "/reservations", label: "Reservasi", icon: "reservation", roles: ["admin", "owner"], mobile: false },
   { href: "/service", label: "Servis", icon: "service", roles: ["admin", "teknisi", "owner"], mobile: true },
   { href: "/bank-stock", label: "Bank Stock", icon: "stock", roles: ["admin", "owner"], mobile: false },
   { href: "/warranty", label: "Garansi", icon: "warranty", roles: ["admin", "owner"], mobile: false },

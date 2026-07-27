@@ -9,16 +9,68 @@ Tulis to-the-point. Entri terbaru di paling atas.
 
 ## Status Saat Ini
 
-- **Fase aktif**: Fase 9.18 Analytics Sumber Trafik Katalog selesai dan deployed production.
+- **Fase aktif**: Fase 9.19 DP Reservation — **deployed production, review visual/authenticated Owner pending**.
 - **Production**: `https://bj-stock.vercel.app` (Vercel project `mobimku-1297s-projects/bj-stock`, deploy CLI).
-- **Supabase**: project `BJsys Project` / ref `ksecrddwowrswfcbdknf` (ap-northeast-2). Migration remote sampai `202607230001_catalog_traffic_source`.
+- **Supabase**: project `BJsys Project` / ref `ksecrddwowrswfcbdknf` (ap-northeast-2). Migration remote sampai `202607260001_dp_reservation`.
 - **Source backup**: private GitHub `https://github.com/Mobimku/bj-stock` (`master`). Secret (`.env*`, `.vercel/`) **tidak** di-commit.
 - **Lokal**: workspace `D:\BJsys` (dipulihkan dari OpenCode snapshot + sesi tool history setelah folder hilang).
-- **Interface yang bisa direview**: seluruh modul sampai katalog/reports; Reports kini memiliki tabel dan CSV sumber trafik katalog.
+- **Interface yang bisa direview**: Reservasi (DP) tersedia di production. Owner akan menguji visual dan flow authenticated setelah deploy lalu memberi feedback.
 
 ---
 
-## Fase 9.18 — Analytics Sumber Trafik Katalog — 23 Juli 2026
+## Fase 9.19 — DP Reservation — 26 Juli 2026 (production deployed, Owner QA pending)
+
+**Apa yang dibangun**
+1. **Migration SQL** (`202607260001_dp_reservation.sql`): tambah `Dipesan` ke `units.status`, `Uang Muka Reservasi` ke kategori Finance, `Reservasi` ke `source_module`, aksi reservasi ke `admin_actions_log`. Tabel `reservations` (uuid PK, idempotency_key unique, id_unit FK, id_customer FK, dp_amount, agreed_price, is_refundable, previous_status, status Dipesan/Selesai/Dibatalkan/Hangus, expires_at, completed_at/cancelled_at/forfeited_at, id_dp_transaction unique FK, id_invoice unique FK, created_by, timestamps). Partial unique index satu DP aktif per unit. Trigger `protect_reservation_terms` (immutable). Patch `enforce_unit_status_transition` dan `prepare_sale` untuk Dipesan via transactional flag.
+2. **Empat RPC atomik** (`security definer`):
+   - `create_reservation()`: Admin/Owner, idempotency via advisory lock + unique key, insert reservation + set unit Dipesan + finance Uang Muka Reservasi (Masuk) + admin_actions_log.
+   - `complete_reservation()`: Admin/Owner, reverse DP + invoke `create_sale` di agreed_price penuh (F-SLS-02), Tunai/Transfer only, tolak overdue.
+   - `refund_reservation()`: **Owner only**, cash-out reversal, unit kembali ke previous_status.
+   - `forfeit_reservation()`: Admin/Owner, non-refundable only, **tanpa entri finance baru**, DP diakui P&L via `pendapatan_dp_hangus`.
+3. **Patch `get_profit_loss`**: tambah `pendapatan_dp_hangus` dari `reservations WHERE status = 'Hangus'`.
+4. **Zod validation** (`lib/validation/reservation.ts`): `createReservationSchema` (idempotencyKey uuid, unitId, customerId uuid, dpAmount positive < agreedPrice, isRefundable bool, expiresAt future ISO), `completeReservationSchema` (unitTest full F-SLS-02, paymentMethod Tunai/Transfer, channel, transactionDate, warrantyDays positive).
+5. **Empat API routes**: `POST /api/reservations` (201), `POST /api/reservations/[id]/complete` (200 + idInvoice), `POST /api/reservations/[id]/refund` (Owner 403 gate), `POST /api/reservations/[id]/forfeit` (200). `POST /api/sales` dipatch dengan guard reject Dipesan di route level.
+6. **UI Reservasi (`reservation-section.tsx`)**: client component di detail unit — untuk Dipesan tampilkan card info customer/DP/harga/expiry + aksi Lunasi/Refund/Hangus (sesuai role dan refundable flag), untuk Ready/Listed tampilkan form buat reservasi (customer select, DP input, harga prefill listing, refundable toggle, expiry picker). Expiry overdue warning merah.
+7. **Halaman `/reservations`**: server component, list semua reservasi filter by status, desktop table + mobile cards.
+8. **Navigation**: item "Reservasi" ditambahkan di `nav-items.ts` untuk admin/owner (sidebar desktop + drawer mobile, tidak di bottom tab).
+9. **PGlite regression tests** (4 files): `reservation-create` (create + status + finance + idempotency + role gate), `reservation-complete` (Selesai + sale penuh + 3 finance net agreed_price + warranty + role gate), `reservation-resolve` (refund net 0 + gate admin + forfeit + P&L dp_hangus + gate teknisi), `reservation-guards` (expired + tetap terkunci + immutable terms + no premature warranty). Test harness `reservation-harness.mjs` + fixtures `reservation-fixtures.mjs`.
+
+**Keputusan teknis**
+- **Idempotency via advisory lock**: `pg_advisory_xact_lock(hashtext('reservation:' || key))` + unique constraint. Replay data sama → return existing row. Replay data berbeda → exception. Lihat `TODO.md` catatan 2026-07-26.
+- **Completion = reversal DP + `create_sale` full**: bukan jurnal sisa. Warranty trigger membaca `harga_jual = agreed_price` penuh, revenue report penuh dari `sales`, DP reversal memberi audit trail eksplisit. Net finance = agreed_price penuh.
+- **Forfeit tanpa entri finance baru**: DP sudah cash-in saat create. Forfeit hanya pengakuan pendapatan via P&L query `reservations.dp_amount WHERE status = 'Hangus'`. Hindari double-counting cash flow.
+- **Overdue tidak auto-resolve**: expiry hanya blokir completion. Refund/forfeit tetap tersedia. Keputusan sadar — auto-Hangus akan menghilangkan hak customer tanpa proses manual Owner.
+- **Unit `Dipesan` hanya lewat completion**: `POST /api/sales` menolak Dipesan di route level + `prepare_sale` RPC hanya accept Dipesan saat `app.reservation_flow` aktif (transactional flag dari `complete_reservation`).
+
+**Verifikasi dan deployment**
+- **Lokal/PGlite**: seluruh 4 test reservation lulus (48 + 43 + 53 + 39 assertions). Bukti:
+  - Create: unit `UNIT-RSV-01` → Dipesan, DP 500.000 Masuk ke Kas Toko, idempotency replay aman, create_sale langsung ditolak, teknisi 403.
+  - Complete: Selesai, sale 3.500.000, 3 finance entries net 3.500.000, warranty 26 Jul → 9 Sep (45 hari), Cicilan ditolak, teknisi ditolak.
+  - Resolve: refund Owner → Dibatalkan + unit Listed + net 0; admin cannot refund; forfeit Admin → Hangus + no finance entry + P&L dp_hangus 500.000; teknisi cannot forfeit.
+  - Guards: expired completion ditolak + reservasi tetap Dipesan + unit tetap terkunci; 4 kolom immutable ditolak; belum ada warranty (belum complete).
+- **Regression/type/build**: `npm run test:reservation`, focused `sale-unit-test.test.mjs`, `npx tsc --noEmit --incremental false`, dan `npm run build` lulus. Full `npm run test:db` tetap berhenti pada kegagalan pre-existing `initial-migration.test.mjs` sebelum suite lain berjalan.
+- **Supabase production**: dry-run menawarkan tepat `202607260001_dp_reservation.sql`; setelah push, remote latest migration `202607260001` dan REST schema probe tabel `reservations` mengembalikan HTTP 200. Warning cache katalog lokal hanya karena Docker Desktop tidak aktif dan tidak memengaruhi push remote.
+- **Vercel production**: deployment `https://bj-stock-jdievwwlm-mobimku-1297s-projects.vercel.app` berstatus READY; alias `https://bj-stock.vercel.app` aktif.
+- **HTTP smoke tanpa sesi**: `/login` 200, `/katalog` 200, `/reservations` 307 ke `/login`, root 307 ke `/dashboard`.
+- **Visual/authenticated QA**: Playwright sengaja tidak dijalankan atas instruksi Owner. Flow create/complete/refund/forfeit dan viewport 360px/390px/desktop menunggu review Owner setelah deploy; ini bukan blocker deployment.
+- **Blokir lint**: ESLint 10 / `eslint-plugin-react` incompatibility pre-existing (sejak Fase 9.2). Bukan temuan baru.
+
+**Status interface**
+- [x] Backend (migration + RPCs + API + Zod) — production
+- [x] Frontend (reservation-section, `/reservations`, nav item) — production
+- [x] Migration deployed ke Supabase production
+- [x] Vercel production build + deploy
+- [ ] Authenticated browser/visual QA — menunggu review dan feedback Owner
+
+**Yang belum selesai / diketahui rusak**
+- Tidak ada blocker deployment yang diketahui. Review visual dan flow authenticated belum dilakukan sesuai instruksi Owner.
+- Pre-existing `initial-migration.test.mjs` gagal sejak awal (bukan regresi reservasi).
+- ESLint incompatibility pre-existing (ESLint 10 / `eslint-plugin-react`).
+
+**Rekomendasi mulai fase berikutnya dari mana**
+1. Owner login sebagai Admin/Owner dan jalankan flow create reservasi → cek unit `Dipesan` + Finance → complete (F-SLS-02) → cek sale, warranty, dan net Finance.
+2. Uji refund refundable sebagai Owner, forfeit non-refundable sebagai Admin/Owner, overdue guard, role Teknisi, serta viewport 360px/390px/desktop.
+3. Catat feedback visual/operasional; centang QA Fase 9.19 setelah flow production disetujui Owner.
 
 **Apa yang dibangun**
 - `catalog_events.traffic_source` menyimpan label pendek terklasifikasi. UTM diprioritaskan, lalu alias share/referrer hostname, lalu `direct`; source pertama disimpan per tab di `sessionStorage`.

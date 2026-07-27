@@ -631,10 +631,40 @@ Tanpa migration ini, cancel service tetap berjalan (biaya di-0-kan, parts dikemb
 
 ---
 
+## Fase 9.19 — DP Reservation (10 task · 👤 review interface)
+
+**Konteks**: Owner ingin pembeli bisa "booking" unit dengan DP tanpa harus langsung lunas. Reservasi mengunci unit sebagai `Dipesan`, mencatat DP masuk, dan diselesaikan lewat tiga jalur eksplisit: lunas ke sale (F-SLS-02 full), refund (Owner, refundable only), atau hangus (Admin/Owner, non-refundable only). Overdue menghalangi lunas tetapi tidak auto-resolve.
+
+- [x] Migration `202607260001_dp_reservation.sql`: tabel `reservations`, partial unique index, trigger immutable terms, patch `enforce_unit_status_transition`, `prepare_sale` accept Dipesan via transactional flag, RPC `create_reservation`/`complete_reservation`/`refund_reservation`/`forfeit_reservation`, RLS, grant execute, `require_admin_or_owner()`, update `get_profit_loss` dengan `pendapatan_dp_hangus`, seed `Uang Muka Reservasi`/`Reservasi` ke constraint finance
+- [x] Zod schemas `lib/validation/reservation.ts`: `createReservationSchema` (idempotencyKey, unitId, customerId, dpAmount, agreedPrice, isRefundable, expiresAt), `completeReservationSchema` (unitTest + paymentMethod Tunai/Transfer + channel + transactionDate + warrantyDays), `reservationIdSchema`
+- [x] API `POST /api/reservations` — create_reservation RPC, Zod, idempotency, 201
+- [x] API `POST /api/reservations/[id]/complete` — complete_reservation RPC, Zod, full F-SLS-02 test, 200 with invoice ID
+- [x] API `POST /api/reservations/[id]/refund` — refund_reservation RPC, Owner gate 403, 200
+- [x] API `POST /api/reservations/[id]/forfeit` — forfeit_reservation RPC, Admin/Owner, 200
+- [x] API `POST /api/sales` — early guard reject `Dipesan` units
+- [x] UI `reservation-section.tsx`: card Dipesan (info + Lunasi/Refund/Hangus), create form untuk Ready/Listed (customer select, dp, harga, refundable toggle, expiry picker), expiry overdue warning
+- [x] UI `app/(dashboard)/reservations/page.tsx`: list reservasi filterable by status, desktop table + mobile cards
+- [x] Nav items: `/reservations` untuk admin/owner (sidebar desktop, drawer mobile)
+- [x] PGlite tests: `reservation-create.test.mjs` (create + status Dipesan + finance entry + idempotency + reject langsung sale + role gate teknisi), `reservation-complete.test.mjs` (Selesai + sale agreed_price + 3 finance net agreed_price + warranty + reject Cicilan + role gate), `reservation-resolve.test.mjs` (refund Owner → Dibatalkan + net 0 + gate admin + forfeit Hangus + no finance + P&L dp_hangus + gate teknisi), `reservation-guards.test.mjs` (expired reject + tetap terkunci + immutable terms + no warranty before completion)
+- [ ] `npm run test:db` — **blokir pre-existing**: `initial-migration.test.mjs` gagal sebelum suite lain berjalan (bukan regresi reservasi). `npm run test:reservation` dan focused `sale-unit-test.test.mjs` lulus.
+- [x] `npx tsc --noEmit --incremental false` — lulus 26 Juli 2026; TypeScript LSP tetap tidak terinstall tetapi bukan blocker typecheck CLI.
+- [x] `npm run build` — production build lokal lulus 26 Juli 2026.
+- [x] Migration `202607260001_dp_reservation.sql` deployed ke Supabase production — remote latest `202607260001`, REST schema probe `reservations` HTTP 200.
+- [x] Deploy ke Vercel production — deployment `bj-stock-jdievwwlm-mobimku-1297s-projects.vercel.app` READY dan alias `https://bj-stock.vercel.app` aktif.
+- [ ] Authenticated browser/visual QA — Playwright sengaja tidak dijalankan atas instruksi Owner; Owner akan menguji interface dan flow reservasi setelah deploy lalu memberi feedback.
+
+👤 **Review interface**: kontrak PGlite reservasi, regresi F-SLS-02, typecheck, build, migration, deployment, dan HTTP smoke tanpa sesi sudah lulus. Owner perlu login dan menguji create → complete/refund/forfeit, overdue, role gate, serta tampilan 360px/390px/desktop; Playwright dilewati sesuai instruksi Owner.
+
+---
+
 ## Catatan Keputusan Teknis
 _(diisi berjalan, tambahkan entri baru di bawah dengan tanggal)_
 
-- 2026-07-23 — **Sumber trafik katalog memakai label pendek, bukan raw tracking**: sistem menyimpan UTM/referrer yang sudah diklasifikasi maksimal 48 karakter; tidak menyimpan raw URL, IP, user agent, lokasi, atau fingerprint. RPC 3-parameter yang sudah live dipertahankan saat overload 4-parameter ditambah agar deployment lama dan baru dapat coexist selama cutover tanpa downtime.
+- 2026-07-26 — **DP Reservation: idempotency lewat advisory lock + unique constraint, bukan application-level retry detection**: `idempotency_key` adalah UUID wajib dari client. RPC `create_reservation` mengunci `hashtext('reservation:' || p_idempotency_key::text)` via `pg_advisory_xact_lock`, lalu query existing; replay dengan data sama mengembalikan row yang sama, replay dengan data berbeda ditolak. Satu unit hanya boleh satu reservasi `Dipesan` aktif (partial unique index `reservations_active_unit_idx` di `id_unit WHERE status = 'Dipesan'`). Idempotency untuk refund/forfeit tidak perlu key terpisah karena aksi sudah dibatasi `for update` pada row reservasi.
+- 2026-07-26 — **Completion reservasi memakai reversal DP + `create_sale` penuh, bukan jurnal sisa**: alih-alih membuat satu entri finance sebesar sisa pelunasan (+dp, −dp reversal, +full sale = net agreed_price penuh), pendekatan ini memastikan (1) warranty trigger existing tetap membaca `harga_jual = agreed_price` penuh, (2) revenue report dan P&L membaca `agreed_price` penuh dari `sales`, bukan nilai campuran dari dua tabel, (3) DP reversal memberi audit trail eksplisit bahwa DP sudah dibukukan dan dibatalkan. Revenue tercatat penuh dari `create_sale`, bukan dijumlah di aplikasi.
+- 2026-07-26 — **Forfeit tidak membuat entri finance baru**: DP non-refundable sudah dicatat sebagai cash-in saat create. Forfeit hanya mengubah status reservasi ke `Hangus`; P&L membaca `reservations.dp_amount WHERE status = 'Hangus'` langsung dari tabel reservasi, bukan dari finance_transactions. Alasan: menghindari double-counting cash flow — uang sudah masuk saat create, keluar hanya saat refund reversal. Forfeit adalah pengakuan pendapatan yang tidak memindahkan uang.
+- 2026-07-26 — **Unit tetap `Dipesan` saat overdue, tidak auto-resolve**: expiry hanya memblokir completion. Refund dan forfeit tetap tersedia untuk reservasi lewat batas. Keputusan desain: auto-resolve ke Hangus akan menghilangkan hak customer atas refund tanpa proses manual Owner — terlalu berisiko untuk bisnis ritel. Overdue tanpa auto-resolve memaksa admin/owner meninjau secara manual.
+- 2026-07-26 — **Sumber trafik katalog memakai label pendek, bukan raw tracking**: sistem menyimpan UTM/referrer yang sudah diklasifikasi maksimal 48 karakter; tidak menyimpan raw URL, IP, user agent, lokasi, atau fingerprint. RPC 3-parameter yang sudah live dipertahankan saat overload 4-parameter ditambah agar deployment lama dan baru dapat coexist selama cutover tanpa downtime.
 - 2026-07-23 — **Brand/model editable, id_unit fixed**: koreksi typo penamaan unit diizinkan Admin/Owner lewat Edit unit. Serial, modal_awal, sumber, tanggal, spek_awal tetap immutable. Tidak regenerate `id_unit` agar QR/histori invoice tetap valid.
 - 2026-07-23 — **Backup source private GitHub**: repo `https://github.com/Mobimku/bj-stock`; deploy tetap Vercel CLI. Secret hanya di Vercel/Supabase env + `.env.local` lokal (gitignored).
 - 2026-07-20 — **Resale setelah cancel**: UNIQUE `sales.id_unit` diganti partial unique (`status IS DISTINCT FROM 'Dibatalkan'`) agar cancel tidak memblokir penjualan ulang unit yang sama.

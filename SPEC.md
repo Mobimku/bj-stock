@@ -82,7 +82,7 @@ create table units (
   total_modal numeric generated always as (modal_awal) stored, -- override via trigger, lihat catatan
   harga_listing numeric check (harga_listing > 0),  -- harga yang dipasang di konten/marketplace saat status = Listed; TERPISAH dari sales.harga_jual (harga final hasil nego saat closing)
   status text not null default 'Masuk'
-    check (status in ('Masuk','QC','Ready','Listed','Terjual','Selesai','Delisted')),
+    check (status in ('Masuk','QC','Ready','Listed','Dipesan','Terjual','Selesai','Delisted')),
   tanggal_masuk date not null default current_date,
   foto_url text[],
   qr_payload text,
@@ -261,7 +261,28 @@ create table service_part_log (
 );
 ```
 
-### Trigger yang wajib dibuat (bukan opsional)
+### Trigger status unit yang wajib ada
+
+`enforce_unit_status_transition` pada `BEFORE UPDATE OF status ON units` mengizinkan transisi linear. Sejak Reservasi (F-RSV) ditambahkan, transisi mencakup:
+
+```
+Masuk → QC → Ready → Listed → Terjual → Selesai
+              │       │
+              └──┬────┘
+                 ↓ create reservation
+              Dipesan ──→ Terjual (completion)
+                 └──────→ previous_status: Ready/Listed (refund/forfeit)
+Ready/Listed → Delisted
+Delisted → Ready (reactivate)
+Terjual → Ready (retur/Cancel Sales)
+Terjual → QC (warranty replacement)
+```
+
+`Dibatalkan` dan `Hangus` adalah status `reservations`, bukan nilai `units.status`. Refund/forfeit mengembalikan unit dari `Dipesan` ke `previous_status` (`Ready`/`Listed`).
+
+Flag transaksi (`app.sales_flow`, `app.reservation_flow`, `app.delist_flow`, `app.reactivate_flow`, `app.warranty_replacement_flow`, `app.returns_flow`) dipakai sebagai transaction-local gate agar hanya alur yang sah yang dapat mengubah status.
+
+### Trigger lain yang wajib dibuat (bukan opsional)
 1. `AFTER INSERT/UPDATE/DELETE ON upgrade_log` → recalculate `units.total_modal` dengan `part/service` sebagai penambah dan `downgrade` sebagai pengurang.
 2. `AFTER INSERT ON upgrade_log / service_part_log` → decrement `bank_stock.stock_qty`.
 3. `AFTER INSERT ON sales` → set `units.status = 'Terjual'`, insert `warranty` row dengan `tanggal_berakhir = tanggal_mulai + sales.durasi_garansi_hari` (bukan angka hardcode), calculate `margin`.
@@ -442,6 +463,10 @@ Urut (`URUT`) reset tiap bulan, dihasilkan lewat sequence/counter table atau que
 | `GET /api/settings/activity-log` | F-SET-03, baca `admin_actions_log` (owner only) |
 | `POST /api/finance/[id]/reversal` | F-FIN-01 poin 3, koreksi transaksi finance (owner only) |
 | `POST /api/returns` | F-FIN-06, proses Retur unit/servis (owner only) |
+| `POST /api/reservations` | F-RSV-01, buat reservasi (Admin/Owner) — idempotency key, dp_amount, agreed_price, is_refundable, expires_at |
+| `POST /api/reservations/[id]/complete` | F-RSV-02, lunasi + sale (Admin/Owner) — reverse DP + create_sale di agreed_price penuh |
+| `POST /api/reservations/[id]/refund` | F-RSV-03, refund DP (Owner only, is_refundable) — cash-out reversal, unit kembali |
+| `POST /api/reservations/[id]/forfeit` | F-RSV-04, hanguskan DP (Admin/Owner, non-refundable) — tanpa finance baru, unit kembali |
 
 ## 6. Environment Variables
 
@@ -478,11 +503,12 @@ create table finance_transactions (
   kategori text not null check (kategori in (
     'Pembelian Unit','Pembelian Part','Biaya Upgrade Eksternal',
     'Penjualan Unit','Pendapatan Servis','Operasional',
-    'Modal Disetor','Retur Unit','Retur Servis','Selisih Penggantian Unit','Lainnya'
+    'Modal Disetor','Retur Unit','Retur Servis','Selisih Penggantian Unit',
+    'Uang Muka Reservasi','Lainnya'
   )),
   id_account uuid not null references finance_accounts(id_account),
   jumlah numeric not null check (jumlah > 0),
-  source_module text not null check (source_module in ('Stock','BankStock','Sales','Servis','Manual','Retur','Warranty')),
+  source_module text not null check (source_module in ('Stock','BankStock','Sales','Servis','Manual','Retur','Warranty','Reservasi')),
   source_type text,
   source_id text,
   source_event_key text unique,
@@ -556,6 +582,7 @@ create table finance_payments (
 - Sales yang sudah selesai diretur tetap menyumbang `sales.harga_jual` asli ke pendapatan kotor, lalu `returns.jumlah_refund` dikurangkan tepat satu kali; sales tersebut tidak menyumbang HPP, konsisten dengan perilaku Retur yang sudah ada.
 - Nilai persediaan membaca unit belum terjual dan saldo Bank Stock.
 - Pembelian persediaan tidak langsung dianggap beban laba rugi sampai unit/part digunakan atau terjual.
+- DP hangus (`reservations.status = 'Hangus'`) menambah pendapatan di P&L sebagai `pendapatan_dp_hangus` — DP sudah dibukukan saat create (cash-in), forfeit tidak membuat entri baru; `get_profit_loss()` membaca langsung dari `reservations.dp_amount` untuk reservasi Hangus dalam periode forfeited_at.
 
 ## 3.5 Manajemen Akun, Pengaturan, & Audit Log (Modul 10, Owner only)
 
@@ -567,7 +594,9 @@ create table admin_actions_log (
   aktor_role text not null,                -- snapshot role saat aksi dilakukan
   aksi text not null check (aksi in (
     'create_account','deactivate_account','reactivate_account',
-    'update_app_setting','finance_reversal','process_return','warranty_unit_replacement'
+    'update_app_setting','finance_reversal','process_return',
+    'warranty_unit_replacement','create_reservation','complete_reservation',
+    'refund_reservation','forfeit_reservation'
   )),
   target_type text,                        -- 'account' | 'app_setting' | 'finance_transaction' | 'return'
   target_id text,
@@ -596,6 +625,50 @@ $$ language plpgsql security definer;
 -- RPC update_app_setting(p_key, p_value) → panggil require_owner(); simpan value lama ke detail.before; insert admin_actions_log
 -- RPC reverse_transaction(p_id_transaksi, p_catatan) → panggil require_owner(); insert finance_transactions (is_reversal=true, reversal_of=p_id_transaksi); insert admin_actions_log (aksi = 'finance_reversal')
 ```
+
+## 3.6 Reservasi (DP) — F-RSV-01 s.d. F-RSV-04
+
+Satu DP per unit aktif (partial unique index `reservations_active_unit_idx`). Status `Dipesan` menyisip antara `Listed` dan `Terjual`. Empat RPC atomik menangani lifecycle: create, complete (lunasi + `create_sale`), refund (Owner, cash-out reversal), forfeit (Admin/Owner, cash tetap, P&L `pendapatan_dp_hangus`). Ketentuan term (dp_amount, agreed_price, is_refundable, expires_at) immutable setelah create via trigger `protect_reservation_terms`.
+
+```sql
+create table public.reservations (
+  id_reservation uuid primary key default gen_random_uuid(),
+  idempotency_key uuid not null unique,
+  id_unit text not null references public.units(id_unit),
+  id_customer uuid not null references public.customers(id_customer),
+  dp_amount numeric not null check (dp_amount > 0),
+  agreed_price numeric not null check (agreed_price > dp_amount),
+  is_refundable boolean not null,
+  previous_status text not null check (previous_status in ('Ready','Listed')),
+  status text not null default 'Dipesan' check (status in ('Dipesan','Selesai','Dibatalkan','Hangus')),
+  expires_at timestamptz not null,
+  completed_at timestamptz,
+  cancelled_at timestamptz,
+  forfeited_at timestamptz,
+  id_dp_transaction uuid unique references public.finance_transactions(id_transaksi),
+  id_invoice text unique references public.sales(id_invoice),
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create unique index reservations_active_unit_idx on public.reservations(id_unit)
+  where status = 'Dipesan';
+```
+
+**Lifecycle:**
+```
+Ready/Listed ──(create_reservation)──→ Dipesan ──(complete_reservation)──→ Selesai
+                                            ├──(refund_reservation, Owner)──→ Dibatalkan
+                                            └──(forfeit_reservation)──→ Hangus
+```
+
+**Aturan:**
+- **Create** (`create_reservation`): Admin/Owner. Validasi dp_amount > 0, < agreed_price, expires_at > now. Idempotency via `idempotency_key` (advisory lock + replay return). Satu DP aktif per unit (partial unique index). Finance: Uang Muka Reservasi, arah Masuk.
+- **Complete** (`complete_reservation`): Admin/Owner. Reverse DP (Keluar, Uang Muka Reservasi, is_reversal=true, reversal_of=dp_txn), lalu `create_sale` di `agreed_price` penuh. Hanya Tunai/Transfer (v1). Penuh F-SLS-02 test. Overdue ditolak. Net cash = agreed_price penuh.
+- **Refund** (`refund_reservation`): **Owner only**. Hanya untuk `is_refundable = true`. Cash-out reversal DP. Unit kembali ke `previous_status`.
+- **Forfeit** (`forfeit_reservation`): Admin/Owner. Hanya untuk `is_refundable = false`. Tidak ada entri finance baru (DP sudah dibukukan saat create; diakui di P&L sebagai `pendapatan_dp_hangus`). Unit kembali ke `previous_status`.
+- **Overdue (expired)**: `complete_reservation` ditolak. `refund`/`forfeit` tetap tersedia. Tidak ada auto-resolution — reservasi tetap `Dipesan` dan unit tetap terkunci sampai manual resolution.
+- **RLS**: SELECT untuk authenticated; semua INSERT/UPDATE via security definer RPC.
 
 **Catatan implementasi:**
 - `require_owner()` dipanggil di **setiap** RPC sensitif sebagai baris pertama — pola konsisten, bukan re-implementasi cek role di tiap function secara ad-hoc.

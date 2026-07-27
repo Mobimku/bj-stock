@@ -32,8 +32,18 @@ v1.0 · Juli 2026
 Transisi status yang diizinkan (linear, tidak boleh mundur kecuali oleh Admin dengan alasan/catatan):
 ```
 Masuk → QC → Ready → Listed → Terjual → Selesai
+              │       │
+              └──┬────┘
+                 ↓ create reservation
+              Dipesan ──→ Terjual (completion, F-RSV-02)
+                 └──────→ previous_status: Ready/Listed (refund/forfeit, F-RSV-03/04)
+Ready/Listed → Delisted (F-STK-04)
+Delisted → Ready (reactivate, F-STK-04)
+Terjual → Ready (Cancel Sales / Retur)
+Terjual → QC (Warranty Replacement, F-WRT-04)
 ```
-- `Terjual` hanya bisa dicapai melalui proses Sales (F-SLS-01), tidak diubah manual.
+- `Dibatalkan` dan `Hangus` adalah status pada tabel `reservations`, bukan status unit. Setelah refund/forfeit, status unit kembali ke `previous_status` (`Ready`/`Listed`).
+- `Terjual` hanya bisa dicapai melalui proses Sales (F-SLS-01) atau completion reservasi (F-RSV-02), tidak diubah manual.
 - `Selesai` ditandai setelah masa garansi berakhir tanpa klaim aktif.
 - Transisi ke `Listed` **wajib** mengisi `harga_listing` (angka yang dipasang di konten/marketplace) — sistem menolak transisi ke `Listed` kalau field ini kosong. `harga_listing` bisa diedit ulang selama unit masih berstatus `Listed` (mis. repricing), tapi begitu status pindah ke `Terjual`, nilainya jadi riwayat statis (tidak berubah lagi).
 
@@ -396,6 +406,64 @@ Diterima → Diagnosa → Dikerjakan → Selesai → Diambil
 - Pemakaian part tetap masuk perhitungan HPP/biaya pekerjaan untuk laporan laba rugi melalui snapshot biaya part.
 - Event yang sama tidak boleh membentuk lebih dari satu transaksi finance.
 
+## 2.8 Reservasi (DP) — Uang Muka Unit
+
+**F-RSV-01 — Buat Reservasi**
+1. Admin/Owner dari halaman detail unit (`Ready`/`Listed`) memilih "Reservasi (DP)".
+2. Pilih customer (dari CRM), masukkan jumlah DP (> 0, < harga kesepakatan), harga kesepakatan, centang refundable (default true), dan batas waktu reservasi (default +30 hari).
+3. Sistem dalam satu transaksi atomik:
+   - Validasi idempotency key (replay aman, data berbeda ditolak).
+   - Validasi unit status `Ready`/`Listed`, customer valid, `expires_at` di masa depan.
+   - Insert `reservations` (status `Dipesan`).
+   - Ubah `units.status` ke `Dipesan`.
+   - Catat finance: kategori `Uang Muka Reservasi`, arah `Masuk`, jumlah = `dp_amount`.
+   - Log `admin_actions_log` (aksi `create_reservation`).
+4. Satu unit hanya boleh memiliki satu reservasi `Dipesan` aktif (partial unique index).
+5. Ketentuan reservasi (`dp_amount`, `agreed_price`, `is_refundable`, `expires_at`) **immutable** setelah create — trigger `protect_reservation_terms` menolak perubahan.
+
+**F-RSV-02 — Lunasi Reservasi (lanjut ke Penjualan)**
+1. Admin/Owner dari halaman detail unit `Dipesan` memilih "Lunasi".
+2. Sistem menampilkan sisa pelunasan, lalu user mengisi form F-SLS-02 lengkap (12 kategori test, buyer acknowledgement) + channel, metode bayar (Tunai/Transfer saja di v1), dan durasi garansi.
+3. Sistem dalam satu transaksi atomik:
+   - Reverse DP: finance `Keluar`, `Uang Muka Reservasi`, `is_reversal=true`, `reversal_of=id_dp_transaction`.
+   - Panggil `create_sale` di `agreed_price` penuh (termasuk test F-SLS-02, warranty trigger existing).
+   - Reservasi → `Selesai`, `completed_at` tercatat.
+   - Log `admin_actions_log` (aksi `complete_reservation`).
+4. Net finance: +dp (create), −dp (reversal), +full agreed_price (sale) = agreed_price penuh. Revenue tercatat penuh, bukan sisa setelah DP.
+5. **Ditolak** bila `expires_at` sudah lewat, metode bayar Cicilan, atau reservasi tidak berstatus `Dipesan`.
+6. `POST /api/sales` menolak unit `Dipesan` di route level — hanya jalur completion yang dapat menjual unit reservasi.
+
+**F-RSV-03 — Refund DP (Owner only)**
+1. Owner membuka detail unit `Dipesan` dengan reservasi `is_refundable = true`.
+2. Klik "Refund DP", konfirmasi.
+3. Sistem dalam satu transaksi atomik:
+   - Finance: cash-out reversal (Keluar, Uang Muka Reservasi, is_reversal=true, reversal_of=dp_txn). Net cash = 0.
+   - Kembalikan `units.status` ke `previous_status` (Ready/Listed).
+   - Reservasi → `Dibatalkan`, `cancelled_at` tercatat.
+   - Log `admin_actions_log` (aksi `refund_reservation`).
+4. **Ditolak** bila `is_refundable = false`, atau status bukan `Dipesan`. **Hanya Owner** — admin mendapat 403.
+
+**F-RSV-04 — Hanguskan DP (Admin/Owner)**
+1. Admin/Owner membuka detail unit `Dipesan` dengan reservasi `is_refundable = false`.
+2. Klik "Hanguskan DP", konfirmasi.
+3. Sistem dalam satu transaksi atomik:
+   - **Tidak ada entri finance baru.** DP sudah dibukukan saat create; P&L mengakui via `pendapatan_dp_hangus` (dibaca dari `reservations.dp_amount` untuk status `Hangus`).
+   - Kembalikan `units.status` ke `previous_status`.
+   - Reservasi → `Hangus`, `forfeited_at` tercatat.
+   - Log `admin_actions_log` (aksi `forfeit_reservation`).
+4. **Ditolak** bila `is_refundable = true`, atau status bukan `Dipesan`.
+
+**Aturan overdue:**
+- `complete_reservation` ditolak bila `expires_at < clock_timestamp()`.
+- `refund_reservation` dan `forfeit_reservation` tetap tersedia — Owner/Admin tetap dapat menyelesaikan reservasi yang lewat batas.
+- Tidak ada auto-resolution. Reservasi overdue tetap `Dipesan` dan unit tetap terkunci sampai ada aksi manual.
+
+**Tampilan:**
+- Halaman `/reservations` (Admin/Owner): daftar semua reservasi, filter status, card mobile + table desktop.
+- Detail unit `Dipesan`: card reservasi dengan info customer, DP, harga, expiry, aksi (Lunasi / Refund / Hangus).
+- Detail unit `Ready`/`Listed`: form buat reservasi (customer select, DP, harga, refundable toggle, expiry picker).
+- Navigasi: item "Reservasi" (Admin/Owner, sidebar desktop + drawer mobile — tidak di bottom tab).
+
 ## 2.9 Pengaturan & Manajemen Akun (Modul 10, Owner only)
 
 **Keputusan desain:** role tetap 3 tingkat (`owner` > `admin` > `teknisi`), **bukan** permission matrix granular per pengguna — lihat alasan di `AGENTS.md` §11. Kalau di masa depan kebutuhannya berubah (lebih dari 1-2 admin dengan tingkat kepercayaan berbeda-beda), baru pertimbangkan layer permission opsional di atas role ini; jangan dibangun sekarang karena tidak proporsional dengan skala bisnis saat ini (`BRD.md` §5).
@@ -464,3 +532,4 @@ Diterima → Diagnosa → Dikerjakan → Selesai → Diambil
 | BR-09 | Halaman katalog publik (`/katalog`, `/katalog/[id_unit]`) tidak pernah menampilkan data finansial internal (modal, margin) atau data yang bisa disalahgunakan (serial number) — hanya data yang memang ditujukan untuk calon pembeli melihat |
 | BR-10 | Penggantian unit garansi tidak membuat Sales/revenue penuh kedua. Invoice asli immutable; hanya selisih aktual yang masuk Finance dan unit rusak wajib kembali ke QC. |
 | BR-11 | Pre-payment unit testing (F-SLS-02) bersifat atomic dengan sale: test wajib selesai sebelum konfirmasi jual, hasil test immutable setelah sale, dan tidak ada status unit baru (`Testing` atau sejenisnya) — unit tetap `Ready`/`Listed` sampai sale final |
+| BR-12 | Satu unit hanya boleh memiliki satu reservasi aktif (`Dipesan`). Ketentuan reservasi (dp_amount, agreed_price, is_refundable, expires_at) immutable setelah create. Overdue tidak auto-resolve — reservasi tetap terkunci sampai ada aksi manual (refund/forfeit). DP non-refundable yang hangus diakui sebagai pendapatan (`pendapatan_dp_hangus`) di P&L langsung dari tabel reservations, bukan dari finance_transactions. |
