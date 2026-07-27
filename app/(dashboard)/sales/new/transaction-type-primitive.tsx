@@ -45,7 +45,7 @@ export function StepOnePrimitive({
           </select>
         </label>
         {selectedUnit && (
-          <div className="mt-4 rounded-2xl bg-stone-950 p-5 text-white">
+          <div className="mt-4 rounded-2xl bg-stone-950 p-5 text-white md:hidden">
             <p className="font-mono text-sm font-bold text-amber-400">{selectedUnit.id}</p>
             <p className="mt-3 text-xs font-bold uppercase tracking-[0.2em] text-stone-400">
               Model unit
