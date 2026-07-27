@@ -35,6 +35,26 @@ export async function createReservation(db, options = {}) {
   );
 }
 
+export async function createCustomerReservation(db, options = {}) {
+  const customerId = Object.hasOwn(options, "customerId") ? options.customerId : CUSTOMER_ID;
+  return db.query(
+    "select * from public.create_reservation($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+    [
+      options.idempotencyKey ?? randomUUID(),
+      options.unitId ?? "UNIT-RSV-01",
+      customerId,
+      options.customerName ?? null,
+      options.customerWa ?? null,
+      options.customerSegment ?? null,
+      options.customerSource ?? null,
+      options.dpAmount ?? 500000,
+      options.agreedPrice ?? 3500000,
+      options.isRefundable ?? true,
+      options.expiresAt ?? FUTURE_EXPIRY,
+    ],
+  );
+}
+
 export async function completeReservation(db, reservationId, options = {}) {
   return db.query(
     "select * from public.complete_reservation($1,$2::jsonb,$3,$4,$5,$6)",

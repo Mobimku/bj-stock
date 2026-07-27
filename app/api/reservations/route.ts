@@ -27,7 +27,11 @@ export async function POST(request: Request) {
     const { data, error } = await supabase.rpc("create_reservation", {
       p_idempotency_key: input.data.idempotencyKey,
       p_id_unit: input.data.unitId,
-      p_id_customer: input.data.customerId,
+      p_id_customer: input.data.customerId ?? null,
+      p_customer_name: input.data.customerName ?? null,
+      p_customer_wa: input.data.customerWa ?? null,
+      p_customer_segment: input.data.customerSegment ?? null,
+      p_customer_source: input.data.customerSource ?? null,
       p_dp_amount: input.data.dpAmount,
       p_agreed_price: input.data.agreedPrice,
       p_is_refundable: input.data.isRefundable,

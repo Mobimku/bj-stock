@@ -5,9 +5,14 @@ export const ADMIN_ID = "11111111-1111-4111-8111-111111111111";
 export const OWNER_ID = "22222222-2222-4222-8222-222222222222";
 export const CUSTOMER_ID = "33333333-3333-4333-8333-333333333333";
 export const ACCOUNT_ID = "44444444-4444-4444-8444-444444444444";
-const migrationUrl = new URL("../migrations/202607260001_dp_reservation.sql", import.meta.url);
+const baselineMigrationUrl = new URL("../migrations/202607260001_dp_reservation.sql", import.meta.url);
+const forwardMigrationUrl = new URL("../migrations/202607270001_sales_reservation_integration.sql", import.meta.url);
 
-export async function createReservationTestDatabase() {
+export async function applyForwardReservationMigration(db) {
+  await db.exec(await readFile(forwardMigrationUrl, "utf8"));
+}
+
+export async function createReservationTestDatabase(options = {}) {
   const db = new PGlite();
   await db.exec(`
     create schema auth;
@@ -27,6 +32,14 @@ export async function createReservationTestDatabase() {
       if public.current_user_role() is distinct from 'owner' then
         raise exception 'Aksi ini hanya dapat dilakukan oleh Owner.';
       end if;
+    end;
+    $$;
+    create function public.normalize_whatsapp(p_value text) returns text language plpgsql immutable set search_path = '' as $$
+    declare digits text := regexp_replace(coalesce(p_value, ''), '[^0-9]', '', 'g');
+    begin
+      if digits = '' then return null; end if;
+      if digits like '0%' then return '62' || substr(digits, 2); end if;
+      return digits;
     end;
     $$;
 
@@ -211,10 +224,9 @@ export async function createReservationTestDatabase() {
       ('UNIT-RSV-03',2200000,'Listed'),('UNIT-RSV-04',2100000,'Ready');
   `);
 
-  try {
-    await db.exec(await readFile(migrationUrl, "utf8"));
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
+  await db.exec(await readFile(baselineMigrationUrl, "utf8"));
+  if (options.applyForward !== false) {
+    await applyForwardReservationMigration(db);
   }
   return db;
 }

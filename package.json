@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:db": "node supabase/tests/initial-migration.test.mjs && node supabase/tests/catalog-analytics.test.mjs && node supabase/tests/catalog-presentation.test.mjs && node supabase/tests/warranty-replacement.test.mjs && node supabase/tests/warranty-replacement-validation.test.mjs && node supabase/tests/finalization-lock-order.test.mjs && node supabase/tests/sale-unit-test.test.mjs && node supabase/tests/migration-reconciliation.test.mjs && node supabase/tests/release-blockers.test.mjs && node supabase/tests/app-settings-contract.test.mjs && node --experimental-strip-types supabase/tests/report-exports.test.mjs && npm run test:reservation",
-    "test:reservation": "node supabase/tests/reservation-create.test.mjs && node supabase/tests/reservation-complete.test.mjs && node supabase/tests/reservation-resolve.test.mjs && node supabase/tests/reservation-guards.test.mjs"
+    "test:reservation": "node supabase/tests/reservation-create.test.mjs && node supabase/tests/reservation-complete.test.mjs && node supabase/tests/reservation-resolve.test.mjs && node supabase/tests/reservation-guards.test.mjs && node supabase/tests/reservation-customer-contract.test.mjs && node supabase/tests/reservation-migration-transition.test.mjs && node supabase/tests/reservation-idempotency-contract.test.mjs && node supabase/tests/reservation-rpc-security.test.mjs && node supabase/tests/reservation-flow-regression.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
