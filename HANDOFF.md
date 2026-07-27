@@ -9,16 +9,16 @@ Tulis to-the-point. Entri terbaru di paling atas.
 
 ## Status Saat Ini
 
-- **Fase aktif**: Integrasi Sales + DP Reservation — **source selesai dan Oracle PASS; release production integration pending**.
+- **Fase aktif**: Integrasi Sales + DP Reservation — **production deployed; authenticated visual review Owner pending**.
 - **Production**: `https://bj-stock.vercel.app` (Vercel project `mobimku-1297s-projects/bj-stock`, deploy CLI).
-- **Supabase**: project `BJsys Project` / ref `ksecrddwowrswfcbdknf` (ap-northeast-2). Migration remote sampai `202607260001_dp_reservation`.
+- **Supabase**: project `BJsys Project` / ref `ksecrddwowrswfcbdknf` (ap-northeast-2). Migration remote sampai `202607270001_sales_reservation_integration`.
 - **Source backup**: private GitHub `https://github.com/Mobimku/bj-stock` (`master`). Secret (`.env*`, `.vercel/`) **tidak** di-commit.
 - **Lokal**: workspace `D:\BJsys` (dipulihkan dari OpenCode snapshot + sesi tool history setelah folder hilang).
-- **Interface yang bisa direview**: baseline Reservasi (DP) tersedia di production; flow Sales terpadu masih menunggu gate release, migration `202607270001`, dan deploy Vercel.
+- **Interface yang bisa direview**: flow Sales terpadu dan tab Reservasi tersedia di production; Owner dapat menguji flow authenticated setelah deploy.
 
 ---
 
-## Integrasi Sales + DP Reservation — 27 Juli 2026 (source reviewed, release pending)
+## Integrasi Sales + DP Reservation — 27 Juli 2026 (production deployed, Owner QA pending)
 
 **Apa yang dibangun**
 - `/sales` memiliki tab Penjualan/Reservasi. `/sales/new` memilih unit, customer existing/baru, dan jenis transaksi: Penjualan Langsung lanjut F-SLS-02; Reservasi langsung detail DP/expiry tanpa F-SLS-02. Reservasi aktif memakai **Lanjutkan ke Sales** menuju `/sales/new?reservation=...`, lalu F-SLS-02 dan pelunasan.
@@ -27,18 +27,21 @@ Tulis to-the-point. Entri terbaru di paling atas.
 - Accounting tidak berubah: create `+DP`; completion `-DP` lalu `+agreed_price` penuh; refund `-DP`; forfeit tanpa cash row baru. Overdue tetap terkunci sampai refund/forfeit; refund Owner only, forfeit Admin/Owner.
 
 **Verifikasi saat ini**
-- Focused `reservation-flow-regression.test.mjs` lulus dan Oracle re-audit memberi verdict PASS tanpa blocker correctness, security, money, atau idempotency.
-- Full gate berurutan (`test:reservation`, sale regression, typecheck, build, diff check) belum dicatat sebagai release evidence pada entri ini.
+- `npm run test:reservation`, `sale-unit-test.test.mjs`, `migration-reconciliation.test.mjs`, `npx tsc --noEmit --incremental false`, `npm run build`, dan `git diff --check` lulus berurutan. Oracle re-audit memberi verdict PASS tanpa blocker correctness, security, money, atau idempotency.
+- Supabase remote latest `202607270001`; `request_payload` terverifikasi `jsonb not null`, overload `create_reservation` 7/11 argumen tersedia, dan REST schema probe service-role `limit=0` memberi HTTP 200 tanpa membaca/mengubah row bisnis.
+- Vercel deployment `https://bj-stock-ltax6c67q-mobimku-1297s-projects.vercel.app` berstatus READY dan alias `https://bj-stock.vercel.app` aktif. HTTP smoke: `/login` 200, `/katalog` 200, `/sales`, `/sales?view=reservations`, `/sales/new`, dan `/reservations` 307 ke `/login`.
+- Source release sampai commit `4298abb` sudah dipush ke `origin/master` sebelum entri bukti release ini.
 - Pre-existing: `initial-migration.test.mjs` gagal sebelum suite lain; standalone lint terblokir incompatibility ESLint 10/`eslint-plugin-react`.
 - Playwright sengaja tidak dijalankan atas instruksi Owner. Authenticated flow dan viewport 360px/390px/desktop tetap menunggu review Owner setelah deploy.
 
 **Status dan langkah berikutnya**
 - [x] Source integration, contract tests, cleanup, dan Oracle review.
 - [x] Dokumentasi flow Sales terpadu.
-- [ ] Jalankan full gate release secara berurutan.
-- [ ] Push migration `202607270001` dan smoke schema/RPC.
-- [ ] Deploy Vercel production dan HTTP smoke tanpa Playwright.
-- [ ] Commit atomik dan push `master` ke `origin/master`.
+- [x] Full gate release berurutan.
+- [x] Migration `202607270001` dan smoke schema/RPC non-mutating.
+- [x] Vercel production dan HTTP smoke tanpa Playwright.
+- [x] Commit atomik dan push source `master` ke `origin/master`.
+- [ ] Owner review flow authenticated create reservation → complete/refund/forfeit, overdue/role gate, dan viewport 360px/390px/desktop.
 
 ---
 

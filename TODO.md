@@ -653,16 +653,16 @@ Tanpa migration ini, cancel service tetap berjalan (biaya di-0-kan, parts dikemb
 - [x] `npm run build` — production build lokal lulus 26 Juli 2026.
 - [x] Migration `202607260001_dp_reservation.sql` deployed ke Supabase production — remote latest `202607260001`, REST schema probe `reservations` HTTP 200.
 - [x] Deploy ke Vercel production — deployment `bj-stock-jdievwwlm-mobimku-1297s-projects.vercel.app` READY dan alias `https://bj-stock.vercel.app` aktif.
-- [ ] Gate release integrasi: jalankan berurutan `npm run test:reservation`, `sale-unit-test.test.mjs`, `npx tsc --noEmit --incremental false`, `npm run build`, dan `git diff --check`
-- [ ] Push migration `202607270001_sales_reservation_integration.sql` ke Supabase production + smoke schema/RPC non-mutating
-- [ ] Deploy UI integrasi ke Vercel production + HTTP smoke tanpa Playwright
+- [x] Gate release integrasi: `npm run test:reservation`, `sale-unit-test.test.mjs`, `migration-reconciliation.test.mjs`, `npx tsc --noEmit --incremental false`, `npm run build`, dan `git diff --check` lulus berurutan 27 Juli 2026
+- [x] Push migration `202607270001_sales_reservation_integration.sql` ke Supabase production — remote latest `202607270001`; metadata membuktikan `request_payload jsonb not null` dan overload `create_reservation` 7/11 argumen; REST schema probe read-only HTTP 200
+- [x] Deploy UI integrasi ke Vercel production — deployment `bj-stock-ltax6c67q-mobimku-1297s-projects.vercel.app` READY, alias `https://bj-stock.vercel.app`; HTTP smoke tanpa Playwright lulus
 - [x] Update `SPEC.md`, `FSD.md`, `TODO.md`, dan `HANDOFF.md` untuk flow Sales terpadu
-- [ ] Commit atomik source/migration/test/docs dan push `master` ke `origin/master`
+- [x] Commit atomik source/migration/test/docs dan push `master` ke `origin/master` sampai source release `4298abb`
 - [ ] Authenticated browser/visual QA — Playwright sengaja tidak dijalankan atas instruksi Owner; Owner akan menguji interface dan flow reservasi setelah deploy lalu memberi feedback.
 
 👤 **Review interface**: kontrak PGlite reservasi, regresi F-SLS-02, typecheck, build, migration, deployment, dan HTTP smoke tanpa sesi sudah lulus. Owner perlu login dan menguji create → complete/refund/forfeit, overdue, role gate, serta tampilan 360px/390px/desktop; Playwright dilewati sesuai instruksi Owner.
 
-**Catatan integrasi 27 Juli 2026**: source dan audit flow Sales terpadu selesai, tetapi migration `202607270001`, deploy Vercel integrasi, smoke production, commit, dan push masih mengikuti checklist di atas. Playwright tetap sengaja tidak dijalankan atas instruksi Owner; authenticated visual QA tetap review Owner.
+**Catatan integrasi 27 Juli 2026**: source, audit, gate release, migration `202607270001`, deploy Vercel, smoke production, dan push source selesai. Playwright tetap sengaja tidak dijalankan atas instruksi Owner; authenticated visual QA tetap review Owner.
 
 ---
 
