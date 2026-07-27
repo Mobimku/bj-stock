@@ -9,12 +9,36 @@ Tulis to-the-point. Entri terbaru di paling atas.
 
 ## Status Saat Ini
 
-- **Fase aktif**: Fase 9.19 DP Reservation — **deployed production, review visual/authenticated Owner pending**.
+- **Fase aktif**: Integrasi Sales + DP Reservation — **source selesai dan Oracle PASS; release production integration pending**.
 - **Production**: `https://bj-stock.vercel.app` (Vercel project `mobimku-1297s-projects/bj-stock`, deploy CLI).
 - **Supabase**: project `BJsys Project` / ref `ksecrddwowrswfcbdknf` (ap-northeast-2). Migration remote sampai `202607260001_dp_reservation`.
 - **Source backup**: private GitHub `https://github.com/Mobimku/bj-stock` (`master`). Secret (`.env*`, `.vercel/`) **tidak** di-commit.
 - **Lokal**: workspace `D:\BJsys` (dipulihkan dari OpenCode snapshot + sesi tool history setelah folder hilang).
-- **Interface yang bisa direview**: Reservasi (DP) tersedia di production. Owner akan menguji visual dan flow authenticated setelah deploy lalu memberi feedback.
+- **Interface yang bisa direview**: baseline Reservasi (DP) tersedia di production; flow Sales terpadu masih menunggu gate release, migration `202607270001`, dan deploy Vercel.
+
+---
+
+## Integrasi Sales + DP Reservation — 27 Juli 2026 (source reviewed, release pending)
+
+**Apa yang dibangun**
+- `/sales` memiliki tab Penjualan/Reservasi. `/sales/new` memilih unit, customer existing/baru, dan jenis transaksi: Penjualan Langsung lanjut F-SLS-02; Reservasi langsung detail DP/expiry tanpa F-SLS-02. Reservasi aktif memakai **Lanjutkan ke Sales** menuju `/sales/new?reservation=...`, lalu F-SLS-02 dan pelunasan.
+- `/reservations` menjadi compatibility redirect; nav Reservasi terpisah dan form reservasi/completion di detail unit dihapus. Detail unit hanya menjadi shortcut ke Sales.
+- Migration additive `202607270001_sales_reservation_integration.sql` menambah `reservations.request_payload` canonical immutable/non-null, overload `create_reservation` 11 argumen dan wrapper 7 argumen, serta pemilihan/pembuatan customer atomik. WA `0812…`, `812…`, dan `628…` menjadi identitas yang sama tanpa menimpa profil existing.
+- Accounting tidak berubah: create `+DP`; completion `-DP` lalu `+agreed_price` penuh; refund `-DP`; forfeit tanpa cash row baru. Overdue tetap terkunci sampai refund/forfeit; refund Owner only, forfeit Admin/Owner.
+
+**Verifikasi saat ini**
+- Focused `reservation-flow-regression.test.mjs` lulus dan Oracle re-audit memberi verdict PASS tanpa blocker correctness, security, money, atau idempotency.
+- Full gate berurutan (`test:reservation`, sale regression, typecheck, build, diff check) belum dicatat sebagai release evidence pada entri ini.
+- Pre-existing: `initial-migration.test.mjs` gagal sebelum suite lain; standalone lint terblokir incompatibility ESLint 10/`eslint-plugin-react`.
+- Playwright sengaja tidak dijalankan atas instruksi Owner. Authenticated flow dan viewport 360px/390px/desktop tetap menunggu review Owner setelah deploy.
+
+**Status dan langkah berikutnya**
+- [x] Source integration, contract tests, cleanup, dan Oracle review.
+- [x] Dokumentasi flow Sales terpadu.
+- [ ] Jalankan full gate release secara berurutan.
+- [ ] Push migration `202607270001` dan smoke schema/RPC.
+- [ ] Deploy Vercel production dan HTTP smoke tanpa Playwright.
+- [ ] Commit atomik dan push `master` ke `origin/master`.
 
 ---
 

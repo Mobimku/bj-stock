@@ -642,18 +642,27 @@ Tanpa migration ini, cancel service tetap berjalan (biaya di-0-kan, parts dikemb
 - [x] API `POST /api/reservations/[id]/refund` — refund_reservation RPC, Owner gate 403, 200
 - [x] API `POST /api/reservations/[id]/forfeit` — forfeit_reservation RPC, Admin/Owner, 200
 - [x] API `POST /api/sales` — early guard reject `Dipesan` units
-- [x] UI `reservation-section.tsx`: card Dipesan (info + Lunasi/Refund/Hangus), create form untuk Ready/Listed (customer select, dp, harga, refundable toggle, expiry picker), expiry overdue warning
-- [x] UI `app/(dashboard)/reservations/page.tsx`: list reservasi filterable by status, desktop table + mobile cards
-- [x] Nav items: `/reservations` untuk admin/owner (sidebar desktop, drawer mobile)
+- [x] Integrasi Sales terpadu: `/sales/new` memilih unit + customer existing/baru + jenis transaksi; Penjualan Langsung lanjut F-SLS-02, Reservasi langsung detail DP/expiry tanpa F-SLS-02
+- [x] Tab Reservasi di `/sales`: filter status, desktop table + mobile cards, aksi `Lanjutkan ke Sales` menuju `/sales/new?reservation=...`; refund/forfeit hanya pada status `Dipesan`
+- [x] `/reservations` menjadi compatibility redirect; nav Reservasi terpisah dan form reservasi di detail unit dihapus, detail unit menjadi shortcut ke Sales
+- [x] Migration additive `202607270001_sales_reservation_integration.sql`: `request_payload` canonical immutable/non-null, overload RPC 11 argumen + wrapper 7 argumen, existing/new customer XOR dan atomik, normalisasi WA `0812`/`812`/`628`
+- [x] Contract integration: customer rollback/dedup, transition migration, canonical idempotency, privilege RPC, serta boundary Reservasi tanpa F-SLS-02 vs direct/completion dengan F-SLS-02; Oracle re-audit PASS
 - [x] PGlite tests: `reservation-create.test.mjs` (create + status Dipesan + finance entry + idempotency + reject langsung sale + role gate teknisi), `reservation-complete.test.mjs` (Selesai + sale agreed_price + 3 finance net agreed_price + warranty + reject Cicilan + role gate), `reservation-resolve.test.mjs` (refund Owner → Dibatalkan + net 0 + gate admin + forfeit Hangus + no finance + P&L dp_hangus + gate teknisi), `reservation-guards.test.mjs` (expired reject + tetap terkunci + immutable terms + no warranty before completion)
 - [ ] `npm run test:db` — **blokir pre-existing**: `initial-migration.test.mjs` gagal sebelum suite lain berjalan (bukan regresi reservasi). `npm run test:reservation` dan focused `sale-unit-test.test.mjs` lulus.
 - [x] `npx tsc --noEmit --incremental false` — lulus 26 Juli 2026; TypeScript LSP tetap tidak terinstall tetapi bukan blocker typecheck CLI.
 - [x] `npm run build` — production build lokal lulus 26 Juli 2026.
 - [x] Migration `202607260001_dp_reservation.sql` deployed ke Supabase production — remote latest `202607260001`, REST schema probe `reservations` HTTP 200.
 - [x] Deploy ke Vercel production — deployment `bj-stock-jdievwwlm-mobimku-1297s-projects.vercel.app` READY dan alias `https://bj-stock.vercel.app` aktif.
+- [ ] Gate release integrasi: jalankan berurutan `npm run test:reservation`, `sale-unit-test.test.mjs`, `npx tsc --noEmit --incremental false`, `npm run build`, dan `git diff --check`
+- [ ] Push migration `202607270001_sales_reservation_integration.sql` ke Supabase production + smoke schema/RPC non-mutating
+- [ ] Deploy UI integrasi ke Vercel production + HTTP smoke tanpa Playwright
+- [x] Update `SPEC.md`, `FSD.md`, `TODO.md`, dan `HANDOFF.md` untuk flow Sales terpadu
+- [ ] Commit atomik source/migration/test/docs dan push `master` ke `origin/master`
 - [ ] Authenticated browser/visual QA — Playwright sengaja tidak dijalankan atas instruksi Owner; Owner akan menguji interface dan flow reservasi setelah deploy lalu memberi feedback.
 
 👤 **Review interface**: kontrak PGlite reservasi, regresi F-SLS-02, typecheck, build, migration, deployment, dan HTTP smoke tanpa sesi sudah lulus. Owner perlu login dan menguji create → complete/refund/forfeit, overdue, role gate, serta tampilan 360px/390px/desktop; Playwright dilewati sesuai instruksi Owner.
+
+**Catatan integrasi 27 Juli 2026**: source dan audit flow Sales terpadu selesai, tetapi migration `202607270001`, deploy Vercel integrasi, smoke production, commit, dan push masih mengikuti checklist di atas. Playwright tetap sengaja tidak dijalankan atas instruksi Owner; authenticated visual QA tetap review Owner.
 
 ---
 

@@ -409,20 +409,21 @@ Diterima → Diagnosa → Dikerjakan → Selesai → Diambil
 ## 2.8 Reservasi (DP) — Uang Muka Unit
 
 **F-RSV-01 — Buat Reservasi**
-1. Admin/Owner dari halaman detail unit (`Ready`/`Listed`) memilih "Reservasi (DP)".
-2. Pilih customer (dari CRM), masukkan jumlah DP (> 0, < harga kesepakatan), harga kesepakatan, centang refundable (default true), dan batas waktu reservasi (default +30 hari).
+1. Admin/Owner membuka `/sales/new`. Langkah pertama memilih unit `Ready`/`Listed`, customer existing atau customer baru, lalu jenis transaksi **Reservasi**.
+2. Masukkan jumlah DP (> 0, < harga kesepakatan), harga kesepakatan, refundable (default true), dan batas waktu reservasi (default +30 hari), lalu konfirmasi langsung. **F-SLS-02 tidak dijalankan saat membuat reservasi**; pengujian dilakukan saat reservasi dilanjutkan menjadi Sales.
 3. Sistem dalam satu transaksi atomik:
-   - Validasi idempotency key (replay aman, data berbeda ditolak).
-   - Validasi unit status `Ready`/`Listed`, customer valid, `expires_at` di masa depan.
+   - Canonicalkan payload dan validasi idempotency key sebelum mutasi customer (replay sama aman, payload berbeda ditolak).
+   - Validasi tepat satu mode customer: pilih customer existing atau buat customer baru. Customer baru dibuat/reuse berdasarkan WA canonical dalam transaksi yang sama; kegagalan reservasi tidak meninggalkan customer yatim dan profil existing tidak ditimpa.
+   - Validasi unit status `Ready`/`Listed` dan `expires_at` di masa depan.
    - Insert `reservations` (status `Dipesan`).
    - Ubah `units.status` ke `Dipesan`.
    - Catat finance: kategori `Uang Muka Reservasi`, arah `Masuk`, jumlah = `dp_amount`.
    - Log `admin_actions_log` (aksi `create_reservation`).
 4. Satu unit hanya boleh memiliki satu reservasi `Dipesan` aktif (partial unique index).
-5. Ketentuan reservasi (`dp_amount`, `agreed_price`, `is_refundable`, `expires_at`) **immutable** setelah create — trigger `protect_reservation_terms` menolak perubahan.
+5. Ketentuan reservasi dan `request_payload` canonical **immutable** setelah create — trigger `protect_reservation_terms` menolak perubahan.
 
 **F-RSV-02 — Lunasi Reservasi (lanjut ke Penjualan)**
-1. Admin/Owner dari halaman detail unit `Dipesan` memilih "Lunasi".
+1. Admin/Owner membuka tab Reservasi di `/sales`, lalu pada reservasi `Dipesan` memilih **Lanjutkan ke Sales**.
 2. Sistem menampilkan sisa pelunasan, lalu user mengisi form F-SLS-02 lengkap (12 kategori test, buyer acknowledgement) + channel, metode bayar (Tunai/Transfer saja di v1), dan durasi garansi.
 3. Sistem dalam satu transaksi atomik:
    - Reverse DP: finance `Keluar`, `Uang Muka Reservasi`, `is_reversal=true`, `reversal_of=id_dp_transaction`.
@@ -434,7 +435,7 @@ Diterima → Diagnosa → Dikerjakan → Selesai → Diambil
 6. `POST /api/sales` menolak unit `Dipesan` di route level — hanya jalur completion yang dapat menjual unit reservasi.
 
 **F-RSV-03 — Refund DP (Owner only)**
-1. Owner membuka detail unit `Dipesan` dengan reservasi `is_refundable = true`.
+1. Owner membuka tab Reservasi di `/sales` pada reservasi `Dipesan` dengan `is_refundable = true`.
 2. Klik "Refund DP", konfirmasi.
 3. Sistem dalam satu transaksi atomik:
    - Finance: cash-out reversal (Keluar, Uang Muka Reservasi, is_reversal=true, reversal_of=dp_txn). Net cash = 0.
@@ -444,7 +445,7 @@ Diterima → Diagnosa → Dikerjakan → Selesai → Diambil
 4. **Ditolak** bila `is_refundable = false`, atau status bukan `Dipesan`. **Hanya Owner** — admin mendapat 403.
 
 **F-RSV-04 — Hanguskan DP (Admin/Owner)**
-1. Admin/Owner membuka detail unit `Dipesan` dengan reservasi `is_refundable = false`.
+1. Admin/Owner membuka tab Reservasi di `/sales` pada reservasi `Dipesan` dengan `is_refundable = false`.
 2. Klik "Hanguskan DP", konfirmasi.
 3. Sistem dalam satu transaksi atomik:
    - **Tidak ada entri finance baru.** DP sudah dibukukan saat create; P&L mengakui via `pendapatan_dp_hangus` (dibaca dari `reservations.dp_amount` untuk status `Hangus`).
@@ -459,10 +460,10 @@ Diterima → Diagnosa → Dikerjakan → Selesai → Diambil
 - Tidak ada auto-resolution. Reservasi overdue tetap `Dipesan` dan unit tetap terkunci sampai ada aksi manual.
 
 **Tampilan:**
-- Halaman `/reservations` (Admin/Owner): daftar semua reservasi, filter status, card mobile + table desktop.
-- Detail unit `Dipesan`: card reservasi dengan info customer, DP, harga, expiry, aksi (Lunasi / Refund / Hangus).
-- Detail unit `Ready`/`Listed`: form buat reservasi (customer select, DP, harga, refundable toggle, expiry picker).
-- Navigasi: item "Reservasi" (Admin/Owner, sidebar desktop + drawer mobile — tidak di bottom tab).
+- `/sales` menjadi surface tunggal dengan tab Penjualan dan Reservasi; tab Reservasi menyediakan filter status, card mobile, table desktop, serta aksi **Lanjutkan ke Sales** / Refund / Hangus untuk status `Dipesan`.
+- `/sales/new` menangani dua cabang: Penjualan Langsung → F-SLS-02 → konfirmasi; Reservasi → detail DP/expiry → konfirmasi tanpa F-SLS-02.
+- `/sales/new?reservation=<id>` menangani completion reservasi dan wajib menjalankan F-SLS-02.
+- Detail unit hanya menjadi shortcut ke surface Sales. `/reservations` dipertahankan sebagai compatibility redirect; tidak ada item navigasi Reservasi terpisah.
 
 ## 2.9 Pengaturan & Manajemen Akun (Modul 10, Owner only)
 

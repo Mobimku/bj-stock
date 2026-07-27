@@ -463,7 +463,7 @@ Urut (`URUT`) reset tiap bulan, dihasilkan lewat sequence/counter table atau que
 | `GET /api/settings/activity-log` | F-SET-03, baca `admin_actions_log` (owner only) |
 | `POST /api/finance/[id]/reversal` | F-FIN-01 poin 3, koreksi transaksi finance (owner only) |
 | `POST /api/returns` | F-FIN-06, proses Retur unit/servis (owner only) |
-| `POST /api/reservations` | F-RSV-01, buat reservasi (Admin/Owner) — idempotency key, dp_amount, agreed_price, is_refundable, expires_at |
+| `POST /api/reservations` | F-RSV-01, buat reservasi (Admin/Owner) — pilih tepat satu: `customerId` existing atau profil customer baru; idempotency key, dp_amount, agreed_price, is_refundable, expires_at |
 | `POST /api/reservations/[id]/complete` | F-RSV-02, lunasi + sale (Admin/Owner) — reverse DP + create_sale di agreed_price penuh |
 | `POST /api/reservations/[id]/refund` | F-RSV-03, refund DP (Owner only, is_refundable) — cash-out reversal, unit kembali |
 | `POST /api/reservations/[id]/forfeit` | F-RSV-04, hanguskan DP (Admin/Owner, non-refundable) — tanpa finance baru, unit kembali |
@@ -628,12 +628,13 @@ $$ language plpgsql security definer;
 
 ## 3.6 Reservasi (DP) — F-RSV-01 s.d. F-RSV-04
 
-Satu DP per unit aktif (partial unique index `reservations_active_unit_idx`). Status `Dipesan` menyisip antara `Listed` dan `Terjual`. Empat RPC atomik menangani lifecycle: create, complete (lunasi + `create_sale`), refund (Owner, cash-out reversal), forfeit (Admin/Owner, cash tetap, P&L `pendapatan_dp_hangus`). Ketentuan term (dp_amount, agreed_price, is_refundable, expires_at) immutable setelah create via trigger `protect_reservation_terms`.
+Satu DP per unit aktif (partial unique index `reservations_active_unit_idx`). Status `Dipesan` menyisip antara `Listed` dan `Terjual`. Empat RPC atomik menangani lifecycle: create, complete (lunasi + `create_sale`), refund (Owner, cash-out reversal), forfeit (Admin/Owner, cash tetap, P&L `pendapatan_dp_hangus`). Migration additive `202607270001_sales_reservation_integration.sql` menambah payload idempotency canonical dan pembuatan/pemilihan customer atomik tanpa mengubah baseline lifecycle.
 
 ```sql
 create table public.reservations (
   id_reservation uuid primary key default gen_random_uuid(),
   idempotency_key uuid not null unique,
+  request_payload jsonb not null,
   id_unit text not null references public.units(id_unit),
   id_customer uuid not null references public.customers(id_customer),
   dp_amount numeric not null check (dp_amount > 0),
@@ -663,12 +664,18 @@ Ready/Listed ──(create_reservation)──→ Dipesan ──(complete_reserva
 ```
 
 **Aturan:**
-- **Create** (`create_reservation`): Admin/Owner. Validasi dp_amount > 0, < agreed_price, expires_at > now. Idempotency via `idempotency_key` (advisory lock + replay return). Satu DP aktif per unit (partial unique index). Finance: Uang Muka Reservasi, arah Masuk.
+- **Create** (`create_reservation`): Admin/Owner. Overload 11 argumen menerima tepat satu mode customer: `p_id_customer` existing atau data customer baru (`nama`, WA, segmen, sumber); wrapper 7 argumen tetap tersedia untuk kompatibilitas caller lama. Lookup/create customer berada dalam transaksi yang sama dengan reservasi, status unit, Finance, dan audit, sehingga kegagalan tidak meninggalkan customer yatim. WA `0812…`, `812…`, dan `628…` dipetakan ke identitas canonical yang sama tanpa menimpa nama/segmen/sumber profil existing. Validasi dp_amount > 0, < agreed_price, expires_at > now. Finance: Uang Muka Reservasi, arah Masuk.
+- **Idempotency canonical**: `request_payload` menyimpan payload normalized yang immutable dan non-null. Advisory lock + perbandingan payload dilakukan sebelum lookup/mutasi customer; replay payload sama mengembalikan reservasi lama, sedangkan key sama dengan payload berbeda ditolak. Backfill migration memakai unit/customer/term canonical agar replay data baseline tetap kompatibel.
 - **Complete** (`complete_reservation`): Admin/Owner. Reverse DP (Keluar, Uang Muka Reservasi, is_reversal=true, reversal_of=dp_txn), lalu `create_sale` di `agreed_price` penuh. Hanya Tunai/Transfer (v1). Penuh F-SLS-02 test. Overdue ditolak. Net cash = agreed_price penuh.
 - **Refund** (`refund_reservation`): **Owner only**. Hanya untuk `is_refundable = true`. Cash-out reversal DP. Unit kembali ke `previous_status`.
 - **Forfeit** (`forfeit_reservation`): Admin/Owner. Hanya untuk `is_refundable = false`. Tidak ada entri finance baru (DP sudah dibukukan saat create; diakui di P&L sebagai `pendapatan_dp_hangus`). Unit kembali ke `previous_status`.
 - **Overdue (expired)**: `complete_reservation` ditolak. `refund`/`forfeit` tetap tersedia. Tidak ada auto-resolution — reservasi tetap `Dipesan` dan unit tetap terkunci sampai manual resolution.
 - **RLS**: SELECT untuk authenticated; semua INSERT/UPDATE via security definer RPC.
+
+**Surface Sales terpadu:**
+- `/sales` memiliki tab Penjualan dan Reservasi; `/reservations` hanya compatibility redirect ke `/sales?view=reservations`.
+- `/sales/new`: langkah pertama memilih unit `Ready`/`Listed`, customer existing/baru, dan jenis transaksi. Penjualan langsung lanjut ke F-SLS-02 sebelum konfirmasi. Reservasi langsung mengirim detail DP/expiry tanpa F-SLS-02.
+- `/sales/new?reservation=<id>` menyelesaikan reservasi aktif: tampilkan ringkasan DP/sisa, jalankan F-SLS-02, lalu panggil completion. Aksi refund/forfeit hanya tersedia untuk reservasi `Dipesan` sesuai role dan refundable flag.
 
 **Catatan implementasi:**
 - `require_owner()` dipanggil di **setiap** RPC sensitif sebagai baris pertama — pola konsisten, bukan re-implementasi cek role di tiap function secara ad-hoc.
