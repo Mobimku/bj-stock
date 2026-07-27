@@ -9,12 +9,33 @@ Tulis to-the-point. Entri terbaru di paling atas.
 
 ## Status Saat Ini
 
-- **Fase aktif**: Integrasi Sales + DP Reservation — **production deployed; authenticated visual review Owner pending**.
+- **Fase aktif**: Integrasi Sales + DP Reservation — **production deployed; UI dan audit-log hotfix terverifikasi**.
 - **Production**: `https://bj-stock.vercel.app` (Vercel project `mobimku-1297s-projects/bj-stock`, deploy CLI).
-- **Supabase**: project `BJsys Project` / ref `ksecrddwowrswfcbdknf` (ap-northeast-2). Migration remote sampai `202607270001_sales_reservation_integration`.
+- **Supabase**: project `BJsys Project` / ref `ksecrddwowrswfcbdknf` (ap-northeast-2). Migration remote sampai `202607280001_reservation_audit_log_fix`.
 - **Source backup**: private GitHub `https://github.com/Mobimku/bj-stock` (`master`). Secret (`.env*`, `.vercel/`) **tidak** di-commit.
 - **Lokal**: workspace `D:\BJsys` (dipulihkan dari OpenCode snapshot + sesi tool history setelah folder hilang).
-- **Interface yang bisa direview**: flow Sales terpadu dan tab Reservasi tersedia di production; Owner dapat menguji flow authenticated setelah deploy.
+- **Interface yang bisa direview**: flow Sales terpadu dan tab Reservasi tersedia di production; responsive reservation selection sudah diverifikasi authenticated pada desktop dan mobile.
+
+---
+
+## Hotfix UI Desktop + Audit Log Reservasi — 28 Juli 2026 (production verified)
+
+**Apa yang diperbaiki**
+- Selected-unit preview hitam di `/sales/new` tetap tampil pada mobile, tetapi disembunyikan mulai breakpoint `md` karena desktop sudah menampilkan unit terpilih di `<select>`. Ini menghilangkan layer duplikat setinggi sekitar 201px tanpa mengubah alur form.
+- Migration forward-only `202607280001_reservation_audit_log_fix.sql` mengganti audit write pada empat RPC reservation dengan `public.log_admin_action()`. Schema production F-SET-03 memakai `user_id`, `user_role`, `aksi`, `target`, dan `detail`; kolom `aktor`, `aktor_role`, `target_type`, dan `target_id` tidak pernah ada di production.
+- Harness PGlite diselaraskan ke schema audit production dan assertions lifecycle mencakup role, target, detail unit/DP, serta invoice completion.
+
+**Verifikasi**
+- RED: `reservation-create.test.mjs` gagal tepat dengan PostgreSQL `42703: column "aktor" of relation "admin_actions_log" does not exist`, sama dengan production.
+- GREEN: `npm run test:reservation`, `npx tsc --noEmit --incremental false`, `npm run build`, dan `git diff --check` lulus. Oracle SQL review tidak menemukan regresi role, finance, idempotency, status transition, search path, overload, atau privilege.
+- Production UI deployment `bj-stock-pd1k3m89s-mobimku-1297s-projects.vercel.app` READY dan teralias ke `https://bj-stock.vercel.app`. Runtime desktop 1280×800: preview `display:none`, box `0×0`, content scroll height `1521`; mobile 390×844 dan 360×800: preview visible/readable, contained, dan dapat diposisikan penuh di atas bottom nav. Dua reviewer multimodal independen PASS tanpa blocker.
+- Supabase remote latest `202607280001`. Function metadata menunjukkan overload 11-argumen dan complete/refund/forfeit memakai helper canonical tanpa stale columns; wrapper 7-argumen tetap mendelegasikan.
+- Rollback-only smoke production mencapai create reservation, DP finance, dan audit canonical, lalu sengaja rollback. Count sebelum/sesudah identik: `reservations=0`, `finance=50`, `audit=11`.
+- Akun Auth QA disposable, password/UUID temp, browser session, dan semua screenshot QA sudah dihapus; user deletion diverifikasi HTTP 404.
+
+**Yang diketahui**
+- Full `npm run test:db` tetap memiliki blocker pre-existing pada `initial-migration.test.mjs`; suite reservation penuh lulus.
+- Standalone lint tetap terblokir incompatibility pre-existing ESLint 10/`eslint-plugin-react`.
 
 ---
 

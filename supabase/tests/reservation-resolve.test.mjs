@@ -15,6 +15,9 @@ const refundFinance = await refundDb.query("select * from public.finance_transac
 assert.equal(refundFinance.rows.length, 2);
 assert.equal(refundFinance.rows.filter((row) => row.is_reversal).length, 1);
 assert.equal(refundFinance.rows.reduce((sum,row) => sum + (row.arah === "Masuk" ? Number(row.jumlah) : -Number(row.jumlah)),0), 0);
+const refundAudit = await refundDb.query("select * from public.admin_actions_log where aksi='refund_reservation'");
+assert.equal(refundAudit.rows[0].user_role, "owner");
+assert.equal(refundAudit.rows[0].target, refundable.rows[0].id_reservation);
 await refundDb.close();
 
 const ownerGateDb = await createReservationTestDatabase();
@@ -41,6 +44,9 @@ const profitLoss = await nonRefundDb.query(
 );
 assert.equal(Number(profitLoss.rows[0].pendapatan_dp_hangus), 500000);
 assert.equal(Number(profitLoss.rows[0].laba_bersih), 500000);
+const forfeitAudit = await nonRefundDb.query("select * from public.admin_actions_log where aksi='forfeit_reservation'");
+assert.equal(forfeitAudit.rows[0].user_role, "admin");
+assert.equal(forfeitAudit.rows[0].target, nonRefundable.rows[0].id_reservation);
 await nonRefundDb.close();
 
 const forfeitGateDb = await createReservationTestDatabase();

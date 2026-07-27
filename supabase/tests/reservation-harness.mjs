@@ -7,9 +7,14 @@ export const CUSTOMER_ID = "33333333-3333-4333-8333-333333333333";
 export const ACCOUNT_ID = "44444444-4444-4444-8444-444444444444";
 const baselineMigrationUrl = new URL("../migrations/202607260001_dp_reservation.sql", import.meta.url);
 const forwardMigrationUrl = new URL("../migrations/202607270001_sales_reservation_integration.sql", import.meta.url);
+const auditLogFixMigrationUrl = new URL(
+  "../migrations/202607280001_reservation_audit_log_fix.sql",
+  import.meta.url,
+);
 
 export async function applyForwardReservationMigration(db) {
   await db.exec(await readFile(forwardMigrationUrl, "utf8"));
+  await db.exec(await readFile(auditLogFixMigrationUrl, "utf8"));
 }
 
 export async function createReservationTestDatabase(options = {}) {
@@ -133,18 +138,29 @@ export async function createReservationTestDatabase(options = {}) {
       where s.status = 'Aktif';
     create table public.admin_actions_log (
       id_log uuid primary key default gen_random_uuid(),
-      aktor uuid not null,
-      aktor_role text not null,
+      user_id uuid not null,
+      user_role text not null,
       aksi text not null check (aksi in (
         'create_account','deactivate_account','reactivate_account','update_app_setting',
-        'finance_reversal','process_return','warranty_unit_replacement'
+        'finance_reversal','process_return','warranty_unit_replacement',
+        'create_reservation','complete_reservation','refund_reservation','forfeit_reservation'
       )),
-      target_type text,
-      target_id text,
+      target text,
       detail jsonb,
-      catatan text,
       created_at timestamptz not null default now()
     );
+    create function public.log_admin_action(
+      p_aksi text, p_target text default null, p_detail jsonb default null
+    ) returns void language plpgsql security definer set search_path = '' as $$
+    begin
+      insert into public.admin_actions_log (user_id,user_role,aksi,target,detail)
+      values (
+        auth.uid(),
+        coalesce(auth.jwt() -> 'app_metadata' ->> 'role','unknown'),
+        p_aksi,p_target,p_detail
+      );
+    end;
+    $$;
 
     create function public.enforce_unit_status_transition() returns trigger language plpgsql set search_path = '' as $$
     begin

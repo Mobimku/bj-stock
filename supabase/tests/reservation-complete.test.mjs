@@ -26,6 +26,10 @@ assert.equal(entries.rows.length, 3);
 assert.equal(entries.rows.filter((row) => row.reversal_of === created.rows[0].id_dp_transaction).length, 1);
 const net = entries.rows.reduce((sum, row) => sum + (row.arah === "Masuk" ? Number(row.jumlah) : -Number(row.jumlah)), 0);
 assert.equal(net, 3500000);
+const audit = await db.query("select * from public.admin_actions_log where aksi='complete_reservation'");
+assert.equal(audit.rows[0].user_role, "admin");
+assert.equal(audit.rows[0].target, created.rows[0].id_reservation);
+assert.equal(audit.rows[0].detail.id_invoice, sale.rows[0].id_invoice);
 
 const cicilanDb = await createReservationTestDatabase();
 await setActor(cicilanDb, "admin");

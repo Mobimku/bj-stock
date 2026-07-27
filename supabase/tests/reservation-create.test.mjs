@@ -37,8 +37,10 @@ await assert.rejects(
   /Ready|Listed|reservasi|Dipesan/i,
 );
 const audit = await db.query("select * from public.admin_actions_log where aksi='create_reservation'");
-assert.equal(audit.rows[0].aktor_role, "admin");
-assert.equal(audit.rows[0].target_id, reservation.id_reservation);
+assert.equal(audit.rows[0].user_role, "admin");
+assert.equal(audit.rows[0].target, reservation.id_reservation);
+assert.equal(audit.rows[0].detail.id_unit, reservation.id_unit);
+assert.equal(Number(audit.rows[0].detail.dp_amount), 500000);
 
 const roleDb = await createReservationTestDatabase();
 await setActor(roleDb, "teknisi");
