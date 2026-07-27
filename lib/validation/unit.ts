@@ -34,7 +34,7 @@ export const unitDetailSchema = z.object({
   modal_awal: z.union([z.number(), z.string()]),
   total_modal: z.union([z.number(), z.string()]),
   harga_listing: z.union([z.number(), z.string()]).nullable(),
-  status: z.enum(["Masuk", "QC", "Ready", "Listed", "Terjual", "Selesai", "Delisted"]),
+  status: z.enum(["Masuk", "QC", "Ready", "Listed", "Dipesan", "Terjual", "Selesai", "Delisted"]),
   tanggal_masuk: z.string(),
   foto_url: z.array(z.string().url()).nullable(),
   qr_payload: z.string().nullable(),

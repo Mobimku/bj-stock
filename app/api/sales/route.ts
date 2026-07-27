@@ -43,6 +43,21 @@ export async function POST(request: Request) {
       );
     }
 
+    const { data: unit, error: unitError } = await supabase
+      .from("units")
+      .select("status")
+      .eq("id_unit", input.data.unitId)
+      .maybeSingle();
+    if (unitError) {
+      return NextResponse.json({ error: "Status unit gagal diperiksa." }, { status: 500 });
+    }
+    if (unit?.status === "Dipesan") {
+      return NextResponse.json(
+        { error: "Unit sedang dalam reservasi. Selesaikan reservasi terlebih dahulu." },
+        { status: 400 },
+      );
+    }
+
     const { data, error } = await supabase
       .rpc("create_sale", {
         p_id_unit: input.data.unitId,

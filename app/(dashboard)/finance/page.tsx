@@ -31,6 +31,7 @@ const receivablesSchema = z.array(z.object({
 const profitLossSchema = z.array(z.object({
   pendapatan_sales: z.union([z.number(), z.string()]),
   pendapatan_servis: z.union([z.number(), z.string()]),
+  pendapatan_dp_hangus: z.union([z.number(), z.string()]),
   retur: z.union([z.number(), z.string()]),
   hpp_unit: z.union([z.number(), z.string()]),
   biaya_part_servis: z.union([z.number(), z.string()]),
@@ -93,11 +94,12 @@ export default async function FinancePage({
         <Metric label="Laba bersih" value={summary.laba_bersih} tone={Number(summary.laba_bersih) < 0 ? "red" : "green"} />
       </section>
 
-      <section className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <section className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <SmallMetric label="Retur" value={summary.retur} />
         <SmallMetric label="HPP unit" value={summary.hpp_unit} />
         <SmallMetric label="Part servis" value={summary.biaya_part_servis} />
         <SmallMetric label="Operasional" value={summary.operasional} />
+        <SmallMetric label="DP hangus" value={summary.pendapatan_dp_hangus} />
       </section>
 
       <FinanceForms
