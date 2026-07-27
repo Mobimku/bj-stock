@@ -9,7 +9,6 @@ import { EditSpecButton } from "./edit-spec-button";
 import { PhotoUploadForm } from "./photo-upload";
 import { PhotoGallery } from "./photo-gallery";
 import { SpecHistory } from "./spec-history";
-import { ReservationSection } from "./reservation-section";
 import { loadUnitDetailData } from "./unit-detail-data";
 
 function nextStatusOrNull(status: string): string | null {
@@ -27,7 +26,7 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ id:
     return <main className="mx-auto max-w-7xl px-4 py-12 sm:px-6"><p className="rounded-xl bg-red-50 p-4 text-red-700" role="alert">{result.message}</p></main>;
   }
 
-  const { unit, upgrades, parts, specHistory, isAdmin, isTeknisi, isOwner, activeReservation, customers, defaultWarrantyDays, warnings } = result;
+  const { unit, upgrades, parts, specHistory, isAdmin, isTeknisi, activeReservationId, warnings } = result;
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
@@ -54,7 +53,13 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ id:
             )}
             <div className="mt-5 flex flex-wrap gap-3">
               {isAdmin && (unit.status === "Ready" || unit.status === "Listed") && (
-                <Link className="rounded-xl bg-amber-600 px-5 py-3 font-bold text-stone-950 hover:bg-amber-500" href={`/sales/new?unit=${unit.id_unit}`}>Jual unit</Link>
+                <Link className="rounded-xl bg-amber-600 px-5 py-3 font-bold text-stone-950 hover:bg-amber-500" href={`/sales/new?unit=${unit.id_unit}`}>Transaksi</Link>
+              )}
+              {isAdmin && unit.status === "Dipesan" && activeReservationId && (
+                <Link className="rounded-xl bg-amber-600 px-5 py-3 font-bold text-stone-950 hover:bg-amber-500" href={`/sales/new?reservation=${activeReservationId}`}>Lunasi reservasi</Link>
+              )}
+              {isAdmin && unit.status === "Dipesan" && !activeReservationId && (
+                <Link className="rounded-xl border border-stone-700 px-5 py-3 font-bold hover:border-amber-400 hover:text-amber-400" href="/sales?view=reservations">Lihat reservasi</Link>
               )}
               {(unit.status === "Terjual" || unit.status === "Selesai") && (
                 <Link className="rounded-xl border border-stone-700 px-5 py-3 font-bold hover:border-amber-400 hover:text-amber-400" href={`/warranty?unit=${unit.id_unit}`}>Lihat garansi</Link>
@@ -74,8 +79,6 @@ export default async function UnitDetailPage({ params }: { params: Promise<{ id:
               </div>
             )}
           </section>
-
-          <ReservationSection unitId={unit.id_unit} unitStatus={unit.status} listingPrice={unit.harga_listing} isAdmin={isAdmin} isOwner={isOwner} activeReservation={activeReservation} customers={customers} defaultWarrantyDays={defaultWarrantyDays} />
 
           {warnings.length > 0 && warnings.map((w, i) => <p key={i} className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800" role="alert">{w}</p>)}
 
